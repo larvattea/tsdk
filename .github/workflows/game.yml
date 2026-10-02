@@ -1,0 +1,75 @@
+name: TSDK game contract
+on:
+  workflow_call:
+    inputs:
+      ttea-ref:
+        type: string
+        required: true
+      builder-ref:
+        type: string
+        required: true
+      project-path:
+        type: string
+        default: .
+      release:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  cartridge:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+        python: ['3.10', '3.12']
+    runs-on: ${{ matrix.os }}
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: game
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: larvattea/ttea
+          ref: ${{ inputs.ttea-ref }}
+          path: ttea
+      - uses: actions/checkout@v4
+        with:
+          repository: larvattea/TSDK
+          ref: ${{ inputs.builder-ref }}
+          path: TSDK
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install tooling and authoritative platform
+        run: |
+          uv venv
+          uv pip install ./ttea ./TSDK "ruff>=0.11,<0.12" "mypy>=1.15,<1.16"
+      - name: Validate game and public boundaries
+        shell: bash
+        env:
+          PROJECT_PATH: ${{ inputs.project-path }}
+        run: |
+          uv run --no-project tsdk check "game/$PROJECT_PATH"
+          uv run --no-project ruff check --select E9,F63,F7,F82 "game/$PROJECT_PATH"
+          uv run --no-project mypy --follow-imports=silent --ignore-missing-imports --check-untyped-defs "game/$PROJECT_PATH"
+      - name: Build cartridge
+        shell: bash
+        env:
+          PROJECT_PATH: ${{ inputs.project-path }}
+          RELEASE: ${{ inputs.release }}
+        run: |
+          release=()
+          if [[ "$RELEASE" == 'true' ]]; then release=(--release); fi
+          uv run --no-project tsdk build "game/$PROJECT_PATH" "${release[@]}" --output artifact.ttea
+      - name: Install and exercise cartridge outside checkout
+        run: uv run --no-project python TSDK/ci/smoke.py artifact.ttea
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tsdk-${{ matrix.os }}-${{ matrix.python }}
+          path: artifact.ttea
