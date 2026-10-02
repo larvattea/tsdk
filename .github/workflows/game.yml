@@ -76,6 +76,13 @@ jobs:
           uv run --no-project tsdk check "game/$PROJECT_PATH"
           uv run --no-project ruff check --select E9,F63,F7,F82 "game/$PROJECT_PATH"
           uv run --no-project mypy --follow-imports=silent --ignore-missing-imports --check-untyped-defs "game/$PROJECT_PATH"
+      - name: Run game tests
+        shell: bash
+        env:
+          PROJECT_PATH: ${{ inputs.project-path }}
+        run: |
+          cd "game/$PROJECT_PATH"
+          if [[ -d tests ]]; then uv run --no-project python -m unittest discover -s tests; fi
       - name: Build cartridge
         shell: bash
         env:
