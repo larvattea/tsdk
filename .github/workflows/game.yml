@@ -52,6 +52,11 @@ jobs:
           ref: ${{ inputs.builder-ref }}
           path: TSDK
           ssh-key: ${{ secrets.TSDK_DEPLOY_KEY }}
+      - name: Install Linux Qt runtime dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libegl1 libpulse0
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python }}
