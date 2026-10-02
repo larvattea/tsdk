@@ -14,6 +14,13 @@ on:
       release:
         type: boolean
         default: false
+    secrets:
+      TTEA_DEPLOY_KEY:
+        description: Read-only SSH key for a private TTEA repository
+        required: false
+      TSDK_DEPLOY_KEY:
+        description: Read-only SSH key for a private TSDK repository
+        required: false
 permissions:
   contents: read
 jobs:
@@ -35,14 +42,16 @@ jobs:
           fetch-depth: 0
       - uses: actions/checkout@v4
         with:
-          repository: larvattea/ttea
+          repository: ${{ github.repository_owner }}/ttea
           ref: ${{ inputs.ttea-ref }}
           path: ttea
+          ssh-key: ${{ secrets.TTEA_DEPLOY_KEY }}
       - uses: actions/checkout@v4
         with:
-          repository: larvattea/TSDK
+          repository: ${{ github.repository_owner }}/TSDK
           ref: ${{ inputs.builder-ref }}
           path: TSDK
+          ssh-key: ${{ secrets.TSDK_DEPLOY_KEY }}
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python }}
