@@ -1,0 +1,46 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+    runs-on: ${{ matrix.os }}
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: TSDK
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ttea
+          path: ttea
+          ssh-key: ${{ secrets.TTEA_DEPLOY_KEY }}
+      - name: Install Linux Qt runtime dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libegl1 libpulse0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.10'
+      - name: Configure Git identity for release fixtures
+        run: |
+          git config --global user.name "TSDK CI"
+          git config --global user.email "tsdk-ci@users.noreply.github.com"
+      - name: Test
+        working-directory: TSDK
+        run: |
+          uv sync --locked
+          uv run --locked python -m unittest discover -s tests
+          uvx --from ruff==0.11.13 ruff check --select E9,F src tests ci
