@@ -1,6 +1,5 @@
 """Static compliance checks, not a Python security sandbox."""
 import ast
-import importlib.metadata
 from pathlib import Path
 import sys
 
