@@ -93,7 +93,7 @@ jobs:
           if [[ "$RELEASE" == 'true' ]]; then release=(--release); fi
           uv run --no-project tsdk build "game/$PROJECT_PATH" "${release[@]}" --output artifact.ttea
       - name: Install and exercise cartridge outside checkout
-        run: uv run --no-project python TSDK/ci/smoke.py artifact.ttea
+        run: uv run --no-project python TSDK/tests/test_smoke.py artifact.ttea
       - uses: actions/upload-artifact@v4
         with:
           name: tsdk-${{ matrix.os }}-${{ matrix.python }}

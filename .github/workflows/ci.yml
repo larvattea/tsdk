@@ -43,4 +43,4 @@ jobs:
         run: |
           uv sync --locked
           uv run --locked python -m unittest discover -s tests
-          uvx --from ruff==0.11.13 ruff check --select E9,F src tests ci
+          uvx --from ruff==0.11.13 ruff check --select E9,F src tests

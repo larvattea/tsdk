@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import unittest
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
@@ -14,7 +15,10 @@ from ttea.sdk.tracking import Landmark, Observation, Recording
 
 
 def main():
-    archive = Path(sys.argv[1]).resolve()
+    smoke(Path(sys.argv[1]).resolve())
+
+
+def smoke(archive):
     with tempfile.TemporaryDirectory(prefix="tsdk-ci-") as temporary:
         root = Path(temporary)
         project = root / "installed"
@@ -67,6 +71,16 @@ def run(project, manifest, root):
     if not isinstance(simulated, dict) or not isinstance(replayed, dict):
         raise AssertionError("Runtime must return session result dictionaries")
     print({"simulation": simulated, "loss_recovery_replay": replayed})
+
+
+class SmokeTest(unittest.TestCase):
+    def test_built_cartridges_run_and_recover_from_tracking_loss(self):
+        from tsdk.cli import build
+        from tsdk.template import new_project
+        for profile in ("body", "hands", "face"):
+            with self.subTest(profile=profile), tempfile.TemporaryDirectory() as temporary:
+                root = new_project(Path(temporary) / "game", f"example.{profile}", "Smoke", profile)
+                smoke(build(root))
 
 
 if __name__ == "__main__":
