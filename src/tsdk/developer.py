@@ -658,9 +658,6 @@ class DeveloperPanel(QMainWindow):
             self.camera.close()
             self.camera = None
         self.held.clear()
-        # Changing the input pauses the game; the user resumes it (F2) when ready.
-        if self.process is not None and not self.paused:
-            self.toggle_pause()
         if index == CAMERA:
             try:
                 camera_index = self.camera_device.currentData()
