@@ -39,6 +39,7 @@ REGION_CENTRE = {'fingers': (.5, .675), 'palms': (.5, .55), 'face': (.5, .5)}
 # Default gain around the region centre per control; a nose moves far less than a hand.
 SENSITIVITY = {'fingers': 1., 'palms': 1., 'face': 2.5}
 MOUSE, KEYBOARD, CAMERA = range(3)
+GAMES = Path(__file__).resolve().parents[2]/'games'  # built cartridges in a tsdk checkout
 # Keyboard source: W/A/S/D move the left foot, arrow keys the right one, by (side, dx, dy).
 FOOT_KEYS = {Qt.Key.Key_W: ('left', 0, -1), Qt.Key.Key_A: ('left', -1, 0), Qt.Key.Key_S: ('left', 0, 1),
              Qt.Key.Key_D: ('left', 1, 0), Qt.Key.Key_Up: ('right', 0, -1), Qt.Key.Key_Left: ('right', -1, 0),
@@ -459,10 +460,10 @@ class DeveloperPanel(QMainWindow):
         buttons = QHBoxLayout()
         column.addLayout(buttons)
         load = QPushButton('Load game')
-        menu = QMenu(load)
-        menu.addAction('Project folder…', self.load_folder)
-        menu.addAction('Cartridge (.ttea)…', self.load_cartridge)
-        load.setMenu(menu)
+        self.load_menu = QMenu(load)
+        self.load_menu.aboutToShow.connect(self.fill_load_menu)
+        self.fill_load_menu()
+        load.setMenu(self.load_menu)
         buttons.addWidget(load)
         self.restart_button = QPushButton('Restart game')
         self.restart_button.clicked.connect(self.restart_game)
@@ -704,8 +705,21 @@ class DeveloperPanel(QMainWindow):
         if directory:
             self.load_project(Path(directory))
 
-    def load_cartridge(self):
-        filename,_ = QFileDialog.getOpenFileName(self, 'Load game cartridge', '', 'TSDK cartridges (*.ttea)')
+    def fill_load_menu(self):
+        """Cartridges in the tsdk checkout's games/ folder, then the file pickers."""
+        menu = self.load_menu
+        menu.clear()
+        cartridges = sorted(GAMES.glob('*.ttea'))
+        for cartridge in cartridges:
+            menu.addAction(cartridge.stem, lambda path=cartridge: self.load_cartridge(path))
+        if cartridges:
+            menu.addSeparator()
+        menu.addAction('Project folder…', self.load_folder)
+        menu.addAction('Cartridge (.ttea)…', lambda: self.load_cartridge())
+
+    def load_cartridge(self, filename=None):
+        if filename is None:
+            filename,_ = QFileDialog.getOpenFileName(self, 'Load game cartridge', '', 'TSDK cartridges (*.ttea)')
         if not filename:
             return
         self.cartridges += 1
