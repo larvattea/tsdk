@@ -434,6 +434,11 @@ class DeveloperPanel(QMainWindow):
         self.stale = QCheckBox('Freeze timestamp (stale input)')
         self.stale.toggled.connect(self.set_stale)
         controls.addWidget(self.stale)
+        self.show_feet = QCheckBox('Show feet')
+        self.show_feet.setChecked(True)
+        self.show_feet.setToolTip('Draw the player\'s footprints in the game frame.')
+        self.show_feet.toggled.connect(self.toggle_feet)
+        controls.addWidget(self.show_feet)
         self.record_button = QPushButton('Record observations…')
         self.record_button.clicked.connect(self.toggle_record)
         controls.addWidget(self.record_button)
@@ -741,7 +746,8 @@ class DeveloperPanel(QMainWindow):
         stop_file.unlink(missing_ok=True)
         width, height = self.game_size()
         config = {'session_root': str(self.workdir/'sessions'), 'synthetic': True, 'stop_file': str(stop_file),
-                  'frame_buffer': str(frame_buffer), 'input': 'stdin', 'width': width, 'height': height}
+                  'frame_buffer': str(frame_buffer), 'input': 'stdin', 'width': width, 'height': height,
+                  'show_feet': self.show_feet.isChecked()}
         command = [sys.executable, '-m', 'ttea.sdk.runtime', str(self.project)]
         if replay is None:
             write_state(self.state_path, self.tracker())
@@ -760,6 +766,10 @@ class DeveloperPanel(QMainWindow):
 
     def restart_game(self):
         self.start_game(self.replay)
+
+    def toggle_feet(self):
+        if self.process is not None:
+            self.restart_game()
 
     def showEvent(self, event):
         super().showEvent(event)
