@@ -142,25 +142,30 @@ class CameraSource:
     stale = False
 
     def __init__(self, profile, camera_index):
-        from ttea.sdk.providers import HardwareProvider
         self.profile = profile
         self.frame = None
         self.error = None
-        self._provider = HardwareProvider(profile, camera_index=camera_index)
+        self.loading = True  # opening the camera and loading the model take a few seconds
+        self._provider = None
         self._observation = Observation(profile, time.monotonic(), present=False, confidence_source='measured')
         self._lock = threading.Lock()
         self._running = True
-        self._thread = threading.Thread(target=self._run, name='tsdk-camera', daemon=True)
+        self._thread = threading.Thread(target=self._run, args=(camera_index,), name='tsdk-camera', daemon=True)
         self._thread.start()
 
-    def _run(self):
+    def _run(self, camera_index):
+        from ttea.sdk.providers import HardwareProvider
         try:
+            self._provider = HardwareProvider(self.profile, camera_index=camera_index)
             while self._running:
                 observation = self._provider.read()
                 with self._lock:
                     self._observation, self.frame = observation, self._provider.frame
+                    self.loading = False
         except Exception as exc:
             self.error = exc
+        finally:
+            self.loading = False
 
     def read(self):
         with self._lock:
@@ -169,7 +174,8 @@ class CameraSource:
     def close(self):
         self._running = False
         self._thread.join()
-        self._provider.close()
+        if self._provider is not None:
+            self._provider.close()
 
 
 class GameView(QWidget):
@@ -347,6 +353,16 @@ class LandmarkCanvas(QWidget):
                     control = driver and index in CONTROLS[self.panel.control.currentData()][2]
                     radius = 5 if control else (2 if group == 'face' else 4)
                     painter.drawEllipse(self.point(point),radius,radius)
+        if camera is not None and camera.loading:
+            painter.fillRect(area, QColor(24, 32, 43, 200))
+            centre = area.center()
+            painter.setPen(QPen(QColor('#c4b5fd'), 4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            spin = QRectF(centre.x()-18, centre.y()-30, 36, 36)
+            painter.drawArc(spin, int(-time.monotonic()*360*16) % (360*16), 270*16)
+            painter.setPen(QColor('#cbd5e1'))
+            painter.drawText(QRectF(area.x(), centre.y()+14, area.width(), 24), Qt.AlignmentFlag.AlignCenter,
+                             'Loading camera…')
 
     def mouseMoveEvent(self, event):
         if self.panel.source.currentIndex() == MOUSE:
@@ -847,7 +863,10 @@ class DeveloperPanel(QMainWindow):
                 self.region_height.setMaximum(self.frame_size[1])
                 self.suggest_region()
             if self.camera.error is not None:
-                self.hint.setText(f'Camera failed: {self.camera.error}')
+                error = self.camera.error
+                self.source.setCurrentIndex(MOUSE)
+                QMessageBox.warning(self, 'Cannot open camera', str(error))
+                return
             self.canvas.update()
 
     def shutdown(self):
