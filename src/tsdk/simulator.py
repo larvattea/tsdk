@@ -1,4 +1,4 @@
-"""Developer-mode synthetic controls: skeleton labels, foot placement, and hand gestures."""
+"""Developer-mode body simulation: skeleton edges, foot placement, and hand gestures."""
 from __future__ import annotations
 
 import math
@@ -6,14 +6,6 @@ import math
 from ttea.sdk.simulator import SimulatorProvider
 from ttea.sdk.tracking import Landmark
 
-BODY_NAMES = (
-    'nose left_eye_inner left_eye left_eye_outer right_eye_inner right_eye '
-    'right_eye_outer left_ear right_ear mouth_left mouth_right left_shoulder '
-    'right_shoulder left_elbow right_elbow left_wrist right_wrist left_pinky '
-    'right_pinky left_index right_index left_thumb right_thumb left_hip right_hip '
-    'left_knee right_knee left_ankle right_ankle left_heel right_heel left_toe right_toe'
-).split()
-HAND_NAMES = ['wrist'] + [f'{finger}_{joint}' for finger in ('thumb', 'index', 'middle', 'ring', 'pinky') for joint in ('base', 'proximal', 'distal', 'tip')]
 BODY_EDGES = [(11,12),(11,13),(13,15),(12,14),(14,16),(11,23),(12,24),(23,24),(23,25),(25,27),(24,26),(26,28),(27,29),(29,31),(28,30),(30,32)]
 HAND_EDGES = [(0, 1 + finger * 4) for finger in range(5)] + [(i, i+1) for start in (1,5,9,13,17) for i in range(start,start+3)]
 # Hip, knee, ankle, heel, toe landmark indices per side.

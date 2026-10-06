@@ -15,16 +15,15 @@ from PySide6.QtGui import QColor, QImage, QKeySequence, QPainter, QPen, QShortcu
 from PySide6.QtMultimedia import QMediaDevices
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame,
                                QHBoxLayout, QLabel, QMainWindow, QMenu, QMessageBox, QPushButton, QScrollArea,
-                               QSizePolicy, QSlider, QSpinBox, QVBoxLayout, QWidget)
+                               QSizePolicy, QSpinBox, QVBoxLayout, QWidget)
 
 from ttea.sdk.cartridge import extract_cartridge
 from ttea.sdk.embedding import FrameReader
 from ttea.sdk.runtime import DEFAULT_RESOLUTION, load_manifest
-from ttea.sdk.simulator import EXPRESSIONS, write_state
+from ttea.sdk.simulator import write_state
 from ttea.sdk.tracking import Landmark, Observation, Recording, ReplayProvider
 
-from .simulator import (BODY_EDGES, BODY_NAMES, HAND_EDGES, HAND_NAMES, PALM, DeveloperSimulator, palm_centre,
-                        pointing_down_fingertip)
+from .simulator import BODY_EDGES, HAND_EDGES, PALM, DeveloperSimulator, palm_centre, pointing_down_fingertip
 
 LOW_VISIBILITY = .5
 PROFILES = {'body': 'Body', 'face': 'Face', 'hands': 'Hands'}
@@ -45,8 +44,6 @@ FOOT_KEYS = {Qt.Key.Key_W: ('left', 0, -1), Qt.Key.Key_A: ('left', -1, 0), Qt.Ke
              Qt.Key.Key_D: ('left', 1, 0), Qt.Key.Key_Up: ('right', 0, -1), Qt.Key.Key_Left: ('right', -1, 0),
              Qt.Key.Key_Down: ('right', 0, 1), Qt.Key.Key_Right: ('right', 1, 0)}
 FOOT_SPEED = .6  # game widths per second while a foot key is held
-PRESETS = {'body': ['standing', 'arms_up', 'squat'], 'hands': ['open', 'fist', 'pinch'],
-           'face': ['neutral', 'smile', 'surprise', 'blink']}
 MOUSE_BUTTONS = {Qt.MouseButton.LeftButton: 1, Qt.MouseButton.MiddleButton: 2, Qt.MouseButton.RightButton: 3}
 MODIFIERS = {Qt.KeyboardModifier.ShiftModifier: 'shift', Qt.KeyboardModifier.ControlModifier: 'ctrl',
              Qt.KeyboardModifier.AltModifier: 'alt', Qt.KeyboardModifier.MetaModifier: 'meta'}
@@ -247,7 +244,6 @@ class LandmarkCanvas(QWidget):
     def __init__(self, panel):
         super().__init__()
         self.panel = panel
-        self.dragging = False
         self.setMinimumSize(200, 200)
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -293,11 +289,10 @@ class LandmarkCanvas(QWidget):
         # When hands or a face drive the body, draw the detection (violet, control points enlarged) under it.
         layers = [(mirrored(camera.read()), True)] if driving else []
         layers.append((self.panel.observation(), False))
-        detected = camera is not None and not driving
         for observation, driver in layers:
             for group,points in observation.landmarks.items():
                 base = QColor('#c4b5fd' if driver else ('#5eead4' if group != 'right' else '#fbbf24'))
-                faded = (group in self.panel.provider.hidden and not driver and not detected) or not observation.present
+                faded = not observation.present
                 edges = BODY_EDGES if group == 'body' else (HAND_EDGES if group != 'face' else [])
                 def color(*indices):
                     result = QColor(base)
@@ -309,37 +304,16 @@ class LandmarkCanvas(QWidget):
                     painter.drawLine(self.point(points[a]),self.point(points[b]))
                 painter.setPen(Qt.PenStyle.NoPen)
                 for index,point in enumerate(points):
-                    selected = not driver and group == self.panel.group.currentText() and index == self.panel.joint.currentIndex()
-                    painter.setBrush(QColor('#f87171') if selected else color(index))
+                    painter.setBrush(color(index))
                     control = driver and index in CONTROLS[self.panel.control.currentData()][2]
-                    radius = 5 if selected or control else (2 if group == 'face' else 4)
+                    radius = 5 if control else (2 if group == 'face' else 4)
                     painter.drawEllipse(self.point(point),radius,radius)
 
-    def mousePressEvent(self, event):
-        if event.button() != Qt.MouseButton.LeftButton:
-            return
-        group = self.panel.group.currentText()
-        points = self.panel.observation().landmarks.get(group)
-        if not points:
-            return
-        index = min(range(len(points)), key=lambda i:(self.point(points[i])-event.position()).manhattanLength())
-        if (self.point(points[index])-event.position()).manhattanLength() < 25:
-            self.panel.joint.setCurrentIndex(index)
-            if self.panel.source.currentIndex() == KEYBOARD:
-                self.dragging = True
-                self.mouseMoveEvent(event)
-
     def mouseMoveEvent(self, event):
-        area = self.area()
-        x, y = (event.position().x()-area.x())/area.width(), (event.position().y()-area.y())/area.height()
-        if self.dragging:
-            self.panel.coordinates[0].setValue(x)
-            self.panel.coordinates[1].setValue(y)
-        elif self.panel.source.currentIndex() == MOUSE:
-            self.panel.move_body(x, y)
-
-    def mouseReleaseEvent(self, event):
-        self.dragging = False
+        if self.panel.source.currentIndex() == MOUSE:
+            area = self.area()
+            self.panel.move_body((event.position().x()-area.x())/area.width(),
+                                 (event.position().y()-area.y())/area.height())
 
     def keyPressEvent(self, event):
         if not self.panel.foot_key(event, True):
@@ -366,8 +340,7 @@ class DeveloperPanel(QMainWindow):
         self.launches = 0
         self.cartridges = 0
         self.replay = None
-        self.profile = 'body'
-        self.providers = {}
+        self.provider = DeveloperSimulator('body')
         self.camera = None
         self.driven = None
         self.sensitivity = dict(SENSITIVITY)
@@ -376,8 +349,6 @@ class DeveloperPanel(QMainWindow):
         self.ticked = time.monotonic()
         self.recorder = None
         self.recorded = None
-        self.loading = False
-        self.synthetic_controls = []
         root = QWidget()
         self.setCentralWidget(root)
         layout = QHBoxLayout(root)
@@ -449,66 +420,13 @@ class DeveloperPanel(QMainWindow):
         self.suggest_region()
         for spin in (self.region_width, self.region_height):
             spin.valueChanged.connect(lambda value: self.canvas.update())
-        self.group = QComboBox()
-        form.addRow('Subject', self.group)
-        self.joint = QComboBox()
-        form.addRow('Joint / mesh vertex',self.joint)
-        self.coordinates = []
-        for label in ('X (camera normalized)','Y (camera normalized)','Z (image-relative depth)','Visibility'):
-            spin = QDoubleSpinBox()
-            spin.setRange(-1.,1.) if label == 'Visibility' else spin.setRange(-100.,100.)
-            if label == 'Visibility':
-                spin.setSpecialValueText('Unknown')
-            spin.setDecimals(4)
-            spin.setSingleStep(.01)
-            spin.valueChanged.connect(self.edit_joint)
-            self.coordinates.append(spin)
-            self.synthetic_controls.append(spin)
-            form.addRow(label,spin)
-        self.preset = QComboBox()
-        form.addRow('Preset',self.preset)
-        self.expression = QComboBox()
-        self.expression.addItems(EXPRESSIONS)
-        form.addRow('Expression coefficient',self.expression)
-        self.expression_value = QSlider(Qt.Orientation.Horizontal)
-        self.expression_value.setRange(0,100)
-        form.addRow('Expression 0–1',self.expression_value)
-        self.expression.currentTextChanged.connect(self.load_expression)
-        self.expression_value.valueChanged.connect(self.set_expression)
-        button = QPushButton('Apply preset to selected subject')
-        button.clicked.connect(self.apply_preset)
-        controls.addWidget(button)
-        self.synthetic_controls += [self.preset, button, self.expression, self.expression_value]
-        for axis,label in enumerate(('Move X','Move Y','Move Z')):
-            row = QHBoxLayout()
-            row.addWidget(QLabel(label))
-            for sign in (-1,1):
-                button = QPushButton('−' if sign < 0 else '+')
-                button.clicked.connect(lambda checked=False,a=axis,s=sign:self.move_subject(a,s*.025))
-                row.addWidget(button)
-                self.synthetic_controls.append(button)
-            controls.addLayout(row)
-        for axis,label in enumerate(('Pitch','Yaw','Roll')):
-            row = QHBoxLayout()
-            row.addWidget(QLabel(label))
-            for sign in (-1,1):
-                button = QPushButton('−5°' if sign < 0 else '+5°')
-                button.clicked.connect(lambda checked=False,a=axis,s=sign:self.rotate_subject(a,s*5))
-                row.addWidget(button)
-                self.synthetic_controls.append(button)
-            controls.addLayout(row)
         self.present = QCheckBox('Participant present')
         self.present.setChecked(True)
         self.present.toggled.connect(self.set_present)
         controls.addWidget(self.present)
-        self.subject_present = QCheckBox('Selected subject visible')
-        self.subject_present.setChecked(True)
-        self.subject_present.toggled.connect(self.set_subject_present)
-        controls.addWidget(self.subject_present)
         self.stale = QCheckBox('Freeze timestamp (stale input)')
         self.stale.toggled.connect(self.set_stale)
         controls.addWidget(self.stale)
-        self.synthetic_controls += [self.present, self.subject_present, self.stale]
         self.record_button = QPushButton('Record observations…')
         self.record_button.clicked.connect(self.toggle_record)
         controls.addWidget(self.record_button)
@@ -542,22 +460,14 @@ class DeveloperPanel(QMainWindow):
         self.exit_button.clicked.connect(self.close)
         buttons.addWidget(self.exit_button)
         QShortcut(QKeySequence(QKeySequence.StandardKey.Quit), self, self.close)
-        self.group.currentTextChanged.connect(self.load_group)
-        self.joint.currentIndexChanged.connect(self.load_joint)
         self.source.currentIndexChanged.connect(self.set_source)
         self.camera_device.currentIndexChanged.connect(self.change_camera)
         self.control.currentIndexChanged.connect(self.change_control)
-        self.set_profile('body')
+        self.show_source()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
         self.timer.start(16)
         self.game_view.clear('No game loaded · use Load game')
-
-    @property
-    def provider(self):
-        if self.profile not in self.providers:
-            self.providers[self.profile] = DeveloperSimulator(self.profile)
-        return self.providers[self.profile]
 
     def observation(self):
         """What the game receives."""
@@ -566,37 +476,13 @@ class DeveloperPanel(QMainWindow):
     @property
     def driving(self):
         """The camera detects hands or a face that drive the body skeleton."""
-        return self.camera is not None and self.camera.profile != self.profile
+        return self.camera is not None and self.camera.profile != 'body'
 
     def tracker(self):
         """What write_state sends to the game."""
         if self.driving:
             return self.game_space
         return self.camera if self.camera else self.provider
-
-    def set_profile(self, profile):
-        self.profile = profile
-        self.show_camera_tuning()
-        for widget in (self.expression, self.expression_value):
-            self.form.setRowVisible(widget, self.profile == 'face')
-        self.preset.clear()
-        self.preset.addItems(PRESETS[self.profile])
-        self.group.blockSignals(True)
-        self.group.clear()
-        self.group.addItems(list(self.provider.observation.landmarks))
-        self.group.blockSignals(False)
-        self.present.blockSignals(True)
-        self.present.setChecked(self.provider.observation.present)
-        self.present.blockSignals(False)
-        self.stale.blockSignals(True)
-        self.stale.setChecked(self.provider.stale)
-        self.stale.blockSignals(False)
-        if self.profile == 'face':
-            self.load_expression()
-        if self.camera:
-            self.set_source(CAMERA)
-        self.load_group()
-        self.show_source()
 
     def drive(self, observation):
         """Move the body skeleton from both hands or the nose; other observations hold the pose."""
@@ -619,18 +505,6 @@ class DeveloperPanel(QMainWindow):
             (lx, ly), (rx, ry) = self.provider.foot('left'), self.provider.foot('right')
             self.provider.move('body', nose.x-(lx+rx)/2, nose.y-(ly+ry)/2)
 
-    def load_group(self):
-        self.joint.blockSignals(True)
-        self.joint.clear()
-        group = self.group.currentText()
-        names = BODY_NAMES if group == 'body' else (HAND_NAMES if group != 'face' else [f'vertex {i}' for i in range(478)])
-        self.joint.addItems([f'{i}: {name}' for i,name in enumerate(names)])
-        self.joint.blockSignals(False)
-        self.subject_present.blockSignals(True)
-        self.subject_present.setChecked(group not in self.provider.hidden)
-        self.subject_present.blockSignals(False)
-        self.load_joint()
-
     def change_camera(self):
         if self.camera:
             self.set_source(CAMERA)
@@ -643,9 +517,9 @@ class DeveloperPanel(QMainWindow):
         """Camera rows appear only for the camera source; tuning only for controls that drive the body."""
         camera = self.source.currentIndex() == CAMERA
         control = self.control.currentData()
-        tuned = camera and self.profile == 'body' and control in self.sensitivity
+        tuned = camera and control in self.sensitivity
         self.form.setRowVisible(self.camera_device, camera)
-        self.form.setRowVisible(self.control, camera and self.profile == 'body')
+        self.form.setRowVisible(self.control, camera)
         self.form.setRowVisible(self.sensitivity_box, tuned)
         self.form.setRowVisible(self.region, tuned)
         if control in self.sensitivity:
@@ -681,15 +555,14 @@ class DeveloperPanel(QMainWindow):
                 camera_index = self.camera_device.currentData()
                 if camera_index is None:
                     raise RuntimeError('No camera found')
-                profile = CONTROLS[self.control.currentData()][1] if self.profile == 'body' else self.profile
-                self.camera = CameraSource(profile, camera_index)
+                self.camera = CameraSource(CONTROLS[self.control.currentData()][1], camera_index)
             except Exception as exc:
                 QMessageBox.warning(self, 'Cannot open camera', str(exc))
                 self.source.blockSignals(True)
                 self.source.setCurrentIndex(MOUSE)
                 self.source.blockSignals(False)
         self.show_source()
-        self.load_joint()
+        self.canvas.update()
 
     def show_source(self):
         source = self.source.currentIndex()
@@ -703,7 +576,7 @@ class DeveloperPanel(QMainWindow):
         elif source == CAMERA and self.driving:
             text = tip = 'Camera · your nose moves the centre of both feet.'
         elif source == CAMERA:
-            text = tip = 'Live camera detection · click a joint to inspect it.'
+            text = tip = 'Camera · your body moves the skeleton directly.'
         elif source == MOUSE:
             text = tip = ('Mouse · the mouse over the skeleton preview moves the whole body; '
                           'the feet keep their spacing.')
@@ -713,15 +586,13 @@ class DeveloperPanel(QMainWindow):
         self.info.setText(text)
         self.show_camera_tuning()
         self.canvas.setToolTip(tip)
-        for control in self.synthetic_controls:
-            control.setEnabled(source == KEYBOARD)
         self.show_state()
 
     def move_body(self, x, y):
         """Move the whole body so the midpoint between its feet sits at a normalized game position."""
         (lx, ly), (rx, ry) = self.provider.foot('left'), self.provider.foot('right')
         self.provider.move('body', x-(lx+rx)/2, y-(ly+ry)/2)
-        self.load_joint()
+        self.canvas.update()
 
     def foot_key(self, event, down):
         """In keyboard mode W/A/S/D and the arrow keys move the feet; the game never sees them."""
@@ -743,7 +614,7 @@ class DeveloperPanel(QMainWindow):
                 x, y = self.provider.foot(side)
                 self.provider.place_foot(side, min(max(x+dx*FOOT_SPEED*elapsed, 0.), 1.),
                                          min(max(y+dy*FOOT_SPEED*elapsed, 0.), 1.))
-        self.load_joint()
+        self.canvas.update()
 
     def show_state(self):
         if self.manifest is None:
@@ -765,65 +636,12 @@ class DeveloperPanel(QMainWindow):
             self.status.setText(f"{mode} tracking · Escape ends the game, P pauses it · Ctrl/⌘+Q quits")
         self.canvas.update()
 
-    def load_joint(self):
-        index = self.joint.currentIndex()
-        points = self.observation().landmarks.get(self.group.currentText(), [])
-        if not 0 <= index < len(points):
-            self.canvas.update()
-            return
-        point = points[index]
-        self.loading = True
-        for spin,value in zip(self.coordinates,(point.x,point.y,point.z or 0.,point.visibility if point.visibility is not None else -1.)):
-            spin.setValue(value)
-        self.loading = False
-        self.canvas.update()
-
-    def edit_joint(self):
-        if not self.loading:
-            x,y,z,visibility = [spin.value() for spin in self.coordinates]
-            self.provider.set_joint(self.group.currentText(),self.joint.currentIndex(),x,y,z,
-                                    None if visibility < 0 else visibility)
-            self.canvas.update()
-
-    def apply_preset(self):
-        self.provider.preset(self.group.currentText(),self.preset.currentText())
-        self.load_joint()
-        if self.profile == 'face':
-            self.load_expression()
-
-    def move_subject(self, axis, amount):
-        delta = [0.,0.,0.]
-        delta[axis] = amount
-        self.provider.move(self.group.currentText(),*delta)
-        self.load_joint()
-
-    def rotate_subject(self, axis, amount):
-        angles = [0.,0.,0.]
-        angles[axis] = amount
-        self.provider.rotate(self.group.currentText(),*angles)
-        self.load_joint()
-
     def set_present(self, value):
         self.provider.observation = replace(self.provider.observation,present=value)
         self.canvas.update()
 
-    def set_subject_present(self, value):
-        if value:
-            self.provider.hidden.discard(self.group.currentText())
-        else:
-            self.provider.hidden.add(self.group.currentText())
-        self.canvas.update()
-
     def set_stale(self, value):
         self.provider.stale = value
-
-    def load_expression(self):
-        self.expression_value.blockSignals(True)
-        self.expression_value.setValue(round(self.provider.observation.expressions.get(self.expression.currentText(),0.)*100))
-        self.expression_value.blockSignals(False)
-
-    def set_expression(self, value):
-        self.provider.observation.expressions[self.expression.currentText()] = value/100
 
     def toggle_record(self):
         if self.recorder:
@@ -833,7 +651,7 @@ class DeveloperPanel(QMainWindow):
             return
         filename,_ = QFileDialog.getSaveFileName(self,'Record observations','','JSON Lines (*.jsonl)')
         if filename:
-            self.recorder = Recording(Path(filename),self.profile,calibration=None,config={})
+            self.recorder = Recording(Path(filename),'body',calibration=None,config={})
             self.record_button.setText('Stop recording')
 
     def start_replay(self):
@@ -888,7 +706,6 @@ class DeveloperPanel(QMainWindow):
             return
         self.project, self.manifest = project.resolve(), manifest
         self.suggest_region()
-        self.set_profile(manifest['tracking_profile'])
         self.start_game()
 
     def game_size(self):
@@ -997,7 +814,7 @@ class DeveloperPanel(QMainWindow):
                 self.suggest_region()
             if self.camera.error is not None:
                 self.status.setText(f'Camera failed: {self.camera.error}')
-            self.load_joint()
+            self.canvas.update()
 
     def shutdown(self):
         self.timer.stop()
