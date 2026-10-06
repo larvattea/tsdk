@@ -67,21 +67,6 @@ class DeveloperSimulator(SimulatorProvider):
         self._sync_world()
 
 
-def pointing_down_fingertip(hand):
-    """Index fingertip when a 21-point hand points it down with the other fingers folded, else None.
-
-    Extended: the fingertip is farther from the wrist than its PIP joint; folded: closer.
-    Down: the fingertip is below the index knuckle in the image.
-    """
-    if not hand or len(hand) < 21:
-        return None
-    wrist = hand[0]
-    reach = [math.hypot(point.x-wrist.x, point.y-wrist.y) for point in hand]
-    pointing = reach[8] > reach[6] and hand[8].y > hand[5].y
-    folded = reach[12] < reach[10] and reach[16] < reach[14] and reach[20] < reach[18]
-    return hand[8] if pointing and folded else None
-
-
 def palm_centre(hand):
     """Centre of a 21-point hand's palm, whatever the fingers do; None without a hand."""
     if not hand or len(hand) < 21:

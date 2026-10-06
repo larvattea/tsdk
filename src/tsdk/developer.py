@@ -24,20 +24,19 @@ from ttea.sdk.runtime import DEFAULT_RESOLUTION, load_manifest
 from ttea.sdk.simulator import write_state
 from ttea.sdk.tracking import Landmark, Observation, Recording, ReplayProvider
 
-from .simulator import BODY_EDGES, HAND_EDGES, PALM, DeveloperSimulator, palm_centre, pointing_down_fingertip
+from .simulator import BODY_EDGES, HAND_EDGES, PALM, DeveloperSimulator, palm_centre
 
 LOW_VISIBILITY = .5
 NOSE_TIP = 1  # MediaPipe face mesh vertex
 # Camera controls that can drive a body game: label, MediaPipe model, and the landmarks
 # drawn enlarged in the preview because they move the feet.
-CONTROLS = {'body': ('Body', 'body', ()), 'fingers': ('Hands (index fingers down)', 'hands', (8,)),
-            'palms': ('Whole hands', 'hands', PALM), 'face': ('Face (nose)', 'face', (NOSE_TIP,))}
+CONTROLS = {'face': ('Face (nose)', 'face', (NOSE_TIP,)), 'palms': ('Both hands', 'hands', PALM)}
 # Centre of the camera region that spans the whole game at sensitivity 1; its size is the
-# editable Camera region (camera pixels), suggested from the game resolution. Fingers pointing
-# down hang below the fists, so their region sits low; a palm centre has fingers above, wrist below.
-REGION_CENTRE = {'fingers': (.5, .675), 'palms': (.5, .55), 'face': (.5, .5)}
+# editable Camera region (camera pixels), suggested from the game resolution. A palm centre has
+# fingers above and the wrist below, so the hands' region sits a little low.
+REGION_CENTRE = {'palms': (.5, .55), 'face': (.5, .5)}
 # Default gain around the region centre per control; a nose moves far less than a hand.
-SENSITIVITY = {'fingers': 1., 'palms': 1., 'face': 2.5}
+SENSITIVITY = {'palms': 1., 'face': 2.5}
 MOUSE, KEYBOARD, CAMERA = range(3)
 GAMES = Path(__file__).resolve().parents[2]/'games'  # built cartridges in a tsdk checkout
 # Keyboard source: W/A/S/D move the left foot, arrow keys the right one, by (side, dx, dy).
@@ -400,8 +399,8 @@ class DeveloperPanel(QMainWindow):
         self.control = QComboBox()
         for control, (label, _, _) in CONTROLS.items():
             self.control.addItem(label, control)
-        self.control.setToolTip('What the camera watches to move the body skeleton: your body, both index fingers '
-                                'pointing down or both whole hands (one per foot), or your nose (the centre of both feet).')
+        self.control.setToolTip('What the camera watches to move the body skeleton: your nose (the centre of '
+                                'both feet) or both hands (one per foot).')
         form.addRow('Camera control', self.control)
         self.sensitivity_box = QDoubleSpinBox()
         self.sensitivity_box.setRange(.5, 6.)
@@ -486,26 +485,23 @@ class DeveloperPanel(QMainWindow):
 
     def observation(self):
         """What the game receives."""
-        return self.camera.read() if self.camera and not self.driving else self.provider.observation
+        return self.provider.observation
 
     @property
     def driving(self):
         """The camera detects hands or a face that drive the body skeleton."""
-        return self.camera is not None and self.camera.profile != 'body'
+        return self.camera is not None
 
     def tracker(self):
         """What write_state sends to the game."""
-        if self.driving:
-            return self.game_space
-        return self.camera if self.camera else self.provider
+        return self.game_space if self.driving else self.provider
 
     def drive(self, observation):
         """Move the body skeleton from both hands or the nose; other observations hold the pose."""
         observation = mirrored(observation)
         control = self.control.currentData()
-        if control in ('fingers', 'palms'):
-            locate = pointing_down_fingertip if control == 'fingers' else palm_centre
-            tips = [tip for tip in (locate(observation.landmarks.get(side)) for side in ('left', 'right'))
+        if control == 'palms':
+            tips = [tip for tip in (palm_centre(observation.landmarks.get(side)) for side in ('left', 'right'))
                     if tip is not None]
             if len(tips) == 2:
                 a, b = sorted(tips, key=lambda point: point.x)
@@ -582,16 +578,11 @@ class DeveloperPanel(QMainWindow):
     def show_source(self):
         source = self.source.currentIndex()
         control = self.control.currentData()
-        if source == CAMERA and self.driving and control == 'fingers':
-            tip = ('Camera · point both index fingers down, other fingers folded: each fingertip places a foot. '
-                   'One finger moves the nearer foot; any other hand shape holds the pose.')
-        elif source == CAMERA and self.driving and control == 'palms':
+        if source == CAMERA and control == 'palms':
             tip = ('Camera · each hand places a foot at its palm centre, in any shape. '
                    'With one hand visible it moves the nearer foot.')
-        elif source == CAMERA and self.driving:
-            tip = 'Camera · your nose moves the centre of both feet.'
         elif source == CAMERA:
-            tip = 'Camera · your body moves the skeleton directly.'
+            tip = 'Camera · your nose moves the centre of both feet.'
         elif source == MOUSE:
             tip = ('Mouse · the mouse over the skeleton preview moves the whole body; '
                    'the feet keep their spacing.')

@@ -1,9 +1,9 @@
 import math
 import unittest
 
-from ttea.sdk.tracking import Landmark, TrackingPipeline
+from ttea.sdk.tracking import TrackingPipeline
 
-from tsdk.simulator import MAX_STRIDE, MIN_STANCE, DeveloperSimulator, pointing_down_fingertip
+from tsdk.simulator import MAX_STRIDE, MIN_STANCE, DeveloperSimulator
 
 
 class DeveloperSimulatorTest(unittest.TestCase):
@@ -28,21 +28,6 @@ class DeveloperSimulatorTest(unittest.TestCase):
         self.assertAlmostEqual(hips[0], middle[0])
         for hip, knee, ankle in ((23, 25, 27), (24, 26, 28)):
             self.assertAlmostEqual(body[knee].x, (body[hip].x+body[ankle].x)/2)
-
-    def test_index_pointing_down_needs_other_fingers_folded(self):
-        def flipped(points):  # mirror about the wrist height: fingers point down
-            return [Landmark(p.x, 2 * points[0].y - p.y, p.z) for p in points]
-        provider = DeveloperSimulator("hands")
-        open_hand = provider.observation.landmarks["left"]
-        provider.preset("left", "fist")
-        fist = provider.observation.landmarks["left"]
-        upright = open_hand[:9] + fist[9:]
-        pointing = flipped(upright)
-        self.assertEqual(pointing_down_fingertip(pointing), pointing[8])
-        self.assertIsNone(pointing_down_fingertip(upright))
-        self.assertIsNone(pointing_down_fingertip(flipped(open_hand)))
-        self.assertIsNone(pointing_down_fingertip(flipped(fist)))
-        self.assertIsNone(pointing_down_fingertip(None))
 
     def test_both_feet_keep_their_midpoint_within_stride_limits(self):
         provider = DeveloperSimulator("body")
