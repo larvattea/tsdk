@@ -556,16 +556,17 @@ class DeveloperPanel(QMainWindow):
         self.fill_load_menu()
         load.setMenu(self.load_menu)
         buttons.addWidget(load)
-        self.restart_button = QPushButton('Restart game')
+        self.restart_button = QPushButton('Restart game (F5)')
         self.restart_button.clicked.connect(self.restart_game)
         buttons.addWidget(self.restart_button)
-        self.pause_button = QPushButton('Pause game')
+        self.pause_button = QPushButton('Pause game (F2)')
         self.pause_button.clicked.connect(self.toggle_pause)
         buttons.addWidget(self.pause_button)
         self.stop_button = QPushButton('Stop game')
         self.stop_button.clicked.connect(self.stop_game)
         buttons.addWidget(self.stop_button)
-        self.exit_button = QPushButton('Exit')
+        quit_keys = QKeySequence(QKeySequence.StandardKey.Quit).toString(QKeySequence.SequenceFormat.NativeText)
+        self.exit_button = QPushButton(f'Exit ({quit_keys})')
         self.exit_button.clicked.connect(self.close)
         buttons.addWidget(self.exit_button)
         QShortcut(QKeySequence(QKeySequence.StandardKey.Quit), self, self.close)
@@ -797,7 +798,7 @@ class DeveloperPanel(QMainWindow):
     def start_game(self):
         self.stop_game()
         self.paused = False
-        self.pause_button.setText('Pause game')
+        self.pause_button.setText('Pause game (F2)')
         self.launches += 1
         frame_buffer = self.workdir/f'frame-{self.launches}.bin'
         stop_file = self.workdir/'game.stop'
@@ -880,7 +881,7 @@ class DeveloperPanel(QMainWindow):
         self.send({'type': kind, 'key': name, 'text': event.text(), 'mods': mods})
         if name == 'p' and kind == 'key_down':  # the runtime toggles its pause on P
             self.paused = not self.paused
-            self.pause_button.setText('Resume game' if self.paused else 'Pause game')
+            self.pause_button.setText('Resume game (F2)' if self.paused else 'Pause game (F2)')
 
     def toggle_pause(self):
         """Press P in the game: the runtime toggles its user pause."""
@@ -889,7 +890,7 @@ class DeveloperPanel(QMainWindow):
         for kind in ('key_down', 'key_up'):
             self.send({'type': kind, 'key': 'p', 'text': 'p', 'mods': []})
         self.paused = not self.paused
-        self.pause_button.setText('Resume game' if self.paused else 'Pause game')
+        self.pause_button.setText('Resume game (F2)' if self.paused else 'Pause game (F2)')
         self.game_view.setFocus()
 
     def tick(self):
