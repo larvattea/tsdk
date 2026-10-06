@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import json
+import math
 from pathlib import Path
 import subprocess
 import sys
@@ -15,7 +16,7 @@ from PySide6.QtGui import QColor, QImage, QKeySequence, QPainter, QPen, QShortcu
 from PySide6.QtMultimedia import QMediaDevices
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame,
                                QHBoxLayout, QLabel, QMainWindow, QMenu, QMessageBox, QPushButton, QScrollArea,
-                               QSizePolicy, QSpinBox, QVBoxLayout, QWidget)
+                               QSizePolicy, QSpinBox, QSplitter, QVBoxLayout, QWidget)
 
 from ttea.sdk.cartridge import extract_cartridge
 from ttea.sdk.embedding import FrameReader
@@ -83,6 +84,14 @@ def mirrored(observation):
     """Selfie view of camera landmarks: x flipped, so the user's right is the image's right."""
     return replace(observation, landmarks={group: [Landmark(1-p.x, p.y, p.z, p.visibility) for p in points]
                                            for group, points in observation.landmarks.items()})
+
+
+def fitted(rect, width, height):
+    """Largest rect of the given aspect centred in rect."""
+    scale = min(rect.width()/width, rect.height()/height)
+    result = QRectF(0, 0, width*scale, height*scale)
+    result.moveCenter(rect.center())
+    return result
 
 
 def to_screen(x, y, region, sensitivity=1.):
@@ -184,10 +193,12 @@ class GameView(QWidget):
         self.update()
 
     def target(self):
-        size = self.image.size().scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatio)
-        rect = QRectF(0, 0, size.width(), size.height())
-        rect.moveCenter(QRectF(self.rect()).center())
-        return rect
+        """The game's rect on screen: as large as fits, at the game's aspect ratio, letterboxed."""
+        return fitted(QRectF(self.rect()), *self.panel.resolution())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.panel.show_size()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -248,19 +259,13 @@ class LandmarkCanvas(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     def area(self):
-        """Camera-normalized unit square on screen; with a camera frame, its aspect-fitted image."""
+        """Unit square on screen at the camera frame's aspect, or the game's without a camera frame."""
         rect = QRectF(16, 16, self.width()-32, self.height()-32)
         frame = self.panel.camera.frame if self.panel.camera else None
         if frame is None:
-            side = min(rect.width(), rect.height())
-            square = QRectF(0, 0, side, side)
-            square.moveCenter(rect.center())
-            return square
+            return fitted(rect, *self.panel.resolution())
         height, width = frame.shape[:2]
-        scale = min(rect.width()/width, rect.height()/height)
-        fitted = QRectF(0, 0, width*scale, height*scale)
-        fitted.moveCenter(rect.center())
-        return fitted
+        return fitted(rect, width, height)
 
     def point(self, landmark):
         area = self.area()
@@ -348,22 +353,30 @@ class DeveloperPanel(QMainWindow):
         self.ticked = time.monotonic()
         self.recorder = None
         self.recorded = None
-        root = QWidget()
+        root = QSplitter(Qt.Orientation.Horizontal)
         self.setCentralWidget(root)
-        layout = QHBoxLayout(root)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        game = QWidget()
+        game_column = QVBoxLayout(game)
+        game_column.setContentsMargins(0, 0, 0, 0)
         self.game_view = GameView(self)
-        layout.addWidget(self.game_view, 2)
+        game_column.addWidget(self.game_view, 1)
+        self.size_label = QLabel()
+        self.size_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        game_column.addWidget(self.size_label)
+        root.addWidget(game)
         side = QWidget()
         side.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        layout.addWidget(side, 1)
+        root.addWidget(side)
+        root.setStretchFactor(0, 2)
+        root.setStretchFactor(1, 1)
         column = QVBoxLayout(side)
+        tools = QSplitter(Qt.Orientation.Vertical)
+        column.addWidget(tools, 1)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        column.addWidget(scroll, 1)
+        tools.addWidget(scroll)
         content = QWidget()
         scroll.setWidget(content)
         controls = QVBoxLayout(content)
@@ -431,7 +444,9 @@ class DeveloperPanel(QMainWindow):
         controls.addWidget(button)
         controls.addStretch()
         self.canvas = LandmarkCanvas(self)
-        column.addWidget(self.canvas, 1)
+        tools.addWidget(self.canvas)
+        tools.setStretchFactor(0, 1)
+        tools.setStretchFactor(1, 1)
         self.status = QLabel()
         self.status.setWordWrap(True)
         column.addWidget(self.status)
@@ -608,6 +623,17 @@ class DeveloperPanel(QMainWindow):
                                          min(max(y+dy*FOOT_SPEED*elapsed, 0.), 1.))
         self.canvas.update()
 
+    def resolution(self):
+        """The game's own resolution from its manifest; its aspect ratio is kept wherever it is shown."""
+        return tuple((self.manifest or {}).get('resolution', DEFAULT_RESOLUTION))
+
+    def show_size(self):
+        width, height = self.resolution()
+        divisor = math.gcd(width, height)
+        shown = self.game_view.target()
+        self.size_label.setText(f'{width}×{height} ({width//divisor}:{height//divisor}) · '
+                                f'shown {round(shown.width())}×{round(shown.height())}')
+
     def show_state(self):
         if self.manifest is not None:
             self.setWindowTitle(f"TSDK developer — {self.manifest['id']}")
@@ -694,11 +720,17 @@ class DeveloperPanel(QMainWindow):
             return
         self.project, self.manifest = project.resolve(), manifest
         self.suggest_region()
+        self.show_size()
+        self.game_view.update()
+        self.canvas.update()
         self.start_game()
 
     def game_size(self):
+        """Runtime render size: the game's aspect, as large as fits two thirds of the screen."""
         geometry = self.screen().geometry()
-        return geometry.width()*2//3, geometry.height()
+        width, height = self.resolution()
+        scale = min(geometry.width()*2/3/width, geometry.height()/height)
+        return round(width*scale), round(height*scale)
 
     def start_game(self, replay=None):
         self.stop_game()
