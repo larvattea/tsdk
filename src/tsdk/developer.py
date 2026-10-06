@@ -214,11 +214,30 @@ class GameView(QWidget):
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor('#000000'))
         if self.image is None:
+            target = self.target()
+            painter.fillRect(target, QColor('#0b0f14'))
+            if self.panel.show_feet.isChecked():
+                self.paint_feet(painter, target)
             painter.setPen(QColor('#94a3b8'))
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.message)
+            painter.drawText(target, Qt.AlignmentFlag.AlignCenter, self.message)
             return
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         painter.drawImage(self.target(), self.image)
+
+    def paint_feet(self, painter, target):
+        """Without a game, draw the feet the game would receive, exactly as the runtime does."""
+        import pygame
+        from ttea.sdk.feet import draw_feet
+        from ttea.sdk.tracking import TrackingPipeline
+        tracking = TrackingPipeline('body').process(self.panel.tracker().read())
+        if tracking.missing:
+            return
+        feet = {side: (point.x, point.y) for side, point in tracking.feet.items()
+                if side in ('left', 'right') and not tracking.out_of_area.get(side)}
+        surface = pygame.Surface((max(1, int(target.width())), max(1, int(target.height()))), pygame.SRCALPHA)
+        draw_feet(surface, feet)
+        pixels = pygame.image.tobytes(surface, 'RGBA')
+        painter.drawImage(target.topLeft(), QImage(pixels, *surface.get_size(), QImage.Format.Format_RGBA8888))
 
     def game_position(self, event):
         rect = self.target()
@@ -861,6 +880,8 @@ class DeveloperPanel(QMainWindow):
                 self.drive(observation)
                 self.driven = observation
         write_state(self.state_path, self.tracker())
+        if self.process is None:
+            self.game_view.update()  # feet follow the input even without a game
         if self.frames is not None:
             frame = self.frames.read()
             if frame is not None:
