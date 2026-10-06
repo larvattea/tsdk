@@ -64,9 +64,13 @@ def camera_devices():
     """(name, OpenCV index, is system default) for each video input, in system order.
 
     OpenCV's AVFoundation backend numbers macOS devices by sorted unique ID (so an iPhone
-    Continuity Camera can be index 0); other backends follow system enumeration order.
+    Continuity Camera can be index 0); on Linux OpenCV opens cameras with V4L2, where index N
+    is /dev/videoN; DirectShow on Windows follows system enumeration order.
     """
     devices = list(QMediaDevices.videoInputs())
+    if sys.platform.startswith('linux'):
+        return [(device.description(), int(bytes(device.id()).decode().removeprefix('/dev/video')), device.isDefault())
+                for device in devices]
     numbered = sorted(devices, key=lambda device: bytes(device.id()).decode()) if sys.platform == 'darwin' else devices
     return [(device.description(), numbered.index(device), device.isDefault()) for device in devices]
 
@@ -572,7 +576,6 @@ class DeveloperPanel(QMainWindow):
 
     def set_profile(self, profile):
         self.profile = profile
-        self.form.setRowVisible(self.control, profile == 'body')
         self.show_camera_tuning()
         for widget in (self.expression, self.expression_value):
             self.form.setRowVisible(widget, self.profile == 'face')
@@ -637,8 +640,12 @@ class DeveloperPanel(QMainWindow):
         self.change_camera()
 
     def show_camera_tuning(self):
+        """Camera rows appear only for the camera source; tuning only for controls that drive the body."""
+        camera = self.source.currentIndex() == CAMERA
         control = self.control.currentData()
-        tuned = self.profile == 'body' and control in self.sensitivity
+        tuned = camera and self.profile == 'body' and control in self.sensitivity
+        self.form.setRowVisible(self.camera_device, camera)
+        self.form.setRowVisible(self.control, camera and self.profile == 'body')
         self.form.setRowVisible(self.sensitivity_box, tuned)
         self.form.setRowVisible(self.region, tuned)
         if control in self.sensitivity:
@@ -704,6 +711,7 @@ class DeveloperPanel(QMainWindow):
             text = tip = ('Keyboard · W/A/S/D move the left foot, arrow keys the right foot, while the game or the '
                           'preview has focus; feet stay between hip width and one stride apart.')
         self.info.setText(text)
+        self.show_camera_tuning()
         self.canvas.setToolTip(tip)
         for control in self.synthetic_controls:
             control.setEnabled(source == KEYBOARD)
