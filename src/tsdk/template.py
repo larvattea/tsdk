@@ -68,7 +68,7 @@ dev = ["tsdk>=0.1,<0.2"]
 
 [tool.uv.sources]
 t-tea = {{ path = "../ttea", editable = true }}
-tsdk = {{ path = "../TSDK", editable = true }}
+tsdk = {{ path = "../tsdk", editable = true }}
 ''',
         "game.py": GAME,
         ".gitignore": ".venv/\n__pycache__/\n*.pyc\ndist/\n",

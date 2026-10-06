@@ -1,78 +1,130 @@
-# Develop and build portable TSDK games
+# TSDK: SDK for Serious Exergames
 
-TSDK validates games against the installed TTEA schema, builds `.ttea` ZIP cartridges,
-and runs them in developer mode. Games always run on TTEA's runtime, tracking, and camera providers;
-TSDK adds only the developer window and its synthetic controls.
+Build games for [TTEA](https://github.com/laurogripa/ttea), the interactive-floor exergame console.
 
-## Develop with sibling repositories
+TSDK creates, checks, packages, and test-runs games. Every game runs on TTEA's own runtime, tracking, and camera code.
 
-Keep `ttea`, `TSDK`, and game checkouts in the same parent directory.
+## Start a game in six commands
+
+Keep `ttea`, `tsdk`, and your games in the same parent directory, then run:
 
 ```sh
-cd TSDK
+cd tsdk
 uv sync --locked
 uv run tsdk new ../example-game --profile body
 cd ../example-game
 uv lock
-uv run tsdk check
 uv run tsdk dev
-uv run tsdk build
 ```
 
-Commit each game's `uv.lock`. Adjust development source paths when using another directory layout.
-The local source configuration is development-only; installed package metadata declares bounded registry dependencies.
-No package publication or remote repository creation is performed by these commands.
-
-## Run developer mode
-
-`uv run tsdk dev [project]` opens a full-screen developer window with no game loaded;
-Load game starts browsing from `project` (default: the current directory) and also accepts `.ttea` cartridges.
-The game runs on the left two thirds in TTEA's runtime. The right third holds the tracking source,
-the skeleton preview, recording/replay, and Load/Restart/Stop game (Exit once the game stops) buttons.
-
-| Source | Drives the game with |
+| Command | Result |
 | --- | --- |
-| Synthetic | Presets, joints, presence, and staleness edited in the panel |
-| Mouse + keyboard | The mouse over the skeleton; hold A or D to plant the left or right foot |
-| Camera tracking | Body; both index fingers pointing down or both whole hands placing the feet; or the nose as the centre of the feet |
+| `tsdk new DEST [--id] [--name] [--profile body\|hands\|face]` | New project with `ttea.toml`, `pyproject.toml`, `game.py`, and `LICENSE` |
+| `tsdk check [project]` | Validates the manifest and source without running the game |
+| `tsdk dev [project]` | Opens developer mode |
+| `tsdk build [project] [--output PATH] [--release]` | Writes `dist/<id>-<version>.ttea` |
 
-Synthetic and mouse sources need no camera, player registration, or physical calibration.
-Camera tracking opens the selected webcam only when chosen.
+Commit each game's `uv.lock`. The `../` paths in `[tool.uv.sources]` serve local development only; change them for another layout.
 
-## Build a release
+## A `.ttea` file is a game TTEA can install
 
-Commit game changes and exclude `dist/` in `.gitignore`, then run:
+A `.ttea` file is a ZIP archive. TTEA installs it, validates its manifest, and runs the game. It holds:
+
+- the entrypoint module, root Python modules, and top-level packages
+- the assets and license notices listed in `ttea.toml`
+- `manifest.json`, generated from `ttea.toml` at build time
+
+You author `ttea.toml`. This one is from Ginga Divina:
+
+```toml
+[game]
+id = "gingadivina"
+version = "2.0.0"
+entrypoint = "game.main:GingaDivina"
+tracking_profile = "body"   # body, hands, or face
+resolution = [800, 600]     # optional; default 1280x720
+game_api = 1
+requires_ttea = ">=2.0,<3"
+assets = ["assets"]
+licenses = ["LICENSE", "CREDITS.md"]
+
+[game.name]
+pt = "Ginga Divina"
+en = "Ginga Divina"
+```
+
+The build adds provenance to `manifest.json`; games cannot set it themselves:
+
+| Field | Value |
+| --- | --- |
+| `format_version` | `1` |
+| `builder.version` | Installed `tsdk` version |
+| `build.source_commit` | Git `HEAD`, or `"unversioned"` outside Git |
+| `build.dirty` | `true` with uncommitted or untracked files |
+
+## Developer mode runs your game beside tracking tools
+
+`uv run tsdk dev [project]` opens a full-screen window with no game loaded.
+Load game starts browsing from `project` (default: the current directory) and accepts project folders or `.ttea` files.
+
+- **Left two thirds**: the game, running in TTEA's runtime.
+- **Right third**: tracking source, skeleton preview, record and replay, and Load/Restart/Stop game (Exit once the game stops).
+
+| Tracking source | How it moves the player |
+| --- | --- |
+| Synthetic | Edit presets, joints, presence, and stale timestamps in the panel |
+| Mouse + keyboard | The mouse over the skeleton moves the whole player; hold A or D to plant the left or right foot |
+| Camera | Body pose, both index fingers pointing down, both whole hands, or the nose as the centre of the feet |
+
+Synthetic and mouse sources need no camera, player registration, or calibration. The webcam opens only when you select Camera.
+Sessions use temporary storage.
+
+> **Note:** The runtime renders off-screen, so `pygame.mouse.get_pos` and `pygame.key.get_pressed` stay idle. Read input from `context.events`.
+
+## Release builds need a clean Git checkout
+
+Exclude `dist/` in `.gitignore`, commit your changes, then run:
 
 ```sh
 uv run tsdk build --release --output dist/game.ttea
 ```
 
-Every build records `importlib.metadata.version('tsdk')`, the source Git commit, and dirty state.
-Local unversioned builds record `source_commit = "unversioned"` and `dirty = true`.
-Release builds reject unversioned, modified, and untracked source state.
-Every packaged file and both authored metadata files must be tracked, including otherwise ignored assets.
-Output paths cannot overwrite packaged source or authored metadata.
-Only the installed builder determines provenance; game-authored provenance is not accepted.
+Release builds fail on unversioned source, modified files, or untracked files.
+Every packaged file must be tracked, including assets your `.gitignore` excludes.
+The output path cannot overwrite packaged source, `ttea.toml`, or `pyproject.toml`.
 
-## Understand the checks
+## Checks enforce the TTEA game contract
 
-The checker validates the authored manifest through `ttea.sdk.cartridge` without importing game code.
-Runtime requirements contain only a bounded TTEA dependency matching the manifest; tooling belongs in development groups.
-Root Python modules, top-level Python packages, declared assets, and license notices enter the cartridge.
-Caches are omitted. Symlinks, binary extensions, models, installers, platform copies, and hidden payloads are rejected.
+`tsdk check` reads `ttea.toml` through `ttea.sdk.cartridge` and parses source without importing it.
 
-AST checks resolve imported and direct assignment aliases, reject unsupported imports and dynamic execution,
-and prevent game-owned display initialization, event pumping, capture, detectors, and dependency installation.
-Ordinary Pygame drawing and NumPy operations remain available.
-Lifecycle callbacks may inherit the public `Game` defaults; overrides use synchronous instance methods with `(self, context)`.
-Required keyword-only parameters and static/class methods are rejected because the runtime cannot call them.
-Static checks enforce concrete conventions, not a security sandbox or proof against adversarial Python.
+- **Dependencies**: `pyproject.toml` lists only `t-tea`, with the same bounded range as `requires_ttea`. Put tools in a development group.
+- **Imports**: standard library, `pygame`, `numpy`, `ttea.sdk.api`, `ttea.sdk.tracking`, and the game's own modules.
+- **Calls**: no display setup, event pumping, clock, camera, `subprocess`, `eval`/`exec`, or dependency installation.
+- **Files**: no symlinks, hidden paths, compiled binaries, ML models, installers, or bundled platform libraries.
+- **Lifecycle**: the entrypoint class defines `start`, `update`, `draw`, `pause`, `resume`, and `stop` as synchronous `(self, context)` methods, or inherits them from `ttea.sdk.api.Game`.
 
-## Reuse native CI
+The checks enforce conventions; they are not a security sandbox.
 
-`.github/workflows/game.yml` accepts `ttea-ref`, `builder-ref`, `project-path`, and `release`.
-Pin the first two inputs to reviewed commits. The workflow installs both projects as packages,
-checks game contracts and public boundaries, builds an artifact, then extracts and runs it outside the checkout.
-Synthetic replay includes tracking loss and recovery. Windows x86-64, Linux x86-64, and macOS ARM64
-run Python 3.10 and 3.12. Call the workflow only after remote creation/publication is authorized.
-Physical capture, projector alignment, audio, and latency still require hardware acceptance.
+## Game repositories reuse one CI workflow
+
+```yaml
+jobs:
+  tsdk:
+    uses: laurogripa/tsdk/.github/workflows/game.yml@main
+    with:
+      ttea-ref: main
+      builder-ref: main
+    secrets: inherit
+```
+
+| Input | Default | Purpose |
+| --- | --- | --- |
+| `ttea-ref`, `builder-ref` | required | TTEA and TSDK commits; pin reviewed ones |
+| `project-path` | `.` | Game directory inside the repository |
+| `python-versions` | `["3.10", "3.12"]` | Python versions to test |
+| `release` | `false` | Build with `--release` |
+
+On Windows x86-64, Linux x86-64, and macOS ARM64, the workflow checks the game, runs its tests, and builds the cartridge.
+It then installs and runs the cartridge outside the checkout, including synthetic tracking loss and recovery.
+Private TTEA and TSDK repositories need the `TTEA_DEPLOY_KEY` and `TSDK_DEPLOY_KEY` secrets.
+Camera capture, projector alignment, audio, and latency still need testing on real hardware.

@@ -121,7 +121,7 @@ def check(root):
     if project.get("dynamic"):
         raise ValueError("Dynamic project metadata is not supported")
     if len(dependencies) != 1:
-        raise ValueError("Game runtime dependencies must contain only t-tea; put TSDK in a development group")
+        raise ValueError("Game runtime dependencies must contain only t-tea; put tsdk in a development group")
     dependency = Requirement(dependencies[0])
     if canonicalize_name(dependency.name) != "t-tea" or dependency.url or dependency.extras or dependency.marker:
         raise ValueError("Only an unconditional t-tea version range is allowed")

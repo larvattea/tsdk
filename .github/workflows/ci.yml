@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          path: TSDK
+          path: tsdk
       - uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/ttea
@@ -39,7 +39,7 @@ jobs:
           git config --global user.name "TSDK CI"
           git config --global user.email "tsdk-ci@users.noreply.github.com"
       - name: Test
-        working-directory: TSDK
+        working-directory: tsdk
         run: |
           uv sync --locked
           uv run --locked python -m unittest discover -s tests

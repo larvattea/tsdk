@@ -23,7 +23,7 @@ on:
         description: Read-only SSH key for a private TTEA repository
         required: false
       TSDK_DEPLOY_KEY:
-        description: Read-only SSH key for a private TSDK repository
+        description: Read-only SSH key for a private tsdk repository
         required: false
 permissions:
   contents: read
@@ -52,9 +52,9 @@ jobs:
           ssh-key: ${{ secrets.TTEA_DEPLOY_KEY }}
       - uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/TSDK
+          repository: ${{ github.repository_owner }}/tsdk
           ref: ${{ inputs.builder-ref }}
-          path: TSDK
+          path: tsdk
           ssh-key: ${{ secrets.TSDK_DEPLOY_KEY }}
       - name: Install Linux Qt runtime dependencies
         if: runner.os == 'Linux'
@@ -67,7 +67,7 @@ jobs:
       - name: Install tooling and authoritative platform
         run: |
           uv venv
-          uv pip install ./ttea ./TSDK "ruff>=0.11,<0.12" "mypy>=1.15,<1.16"
+          uv pip install ./ttea ./tsdk "ruff>=0.11,<0.12" "mypy>=1.15,<1.16"
       - name: Validate game and public boundaries
         shell: bash
         env:
@@ -93,7 +93,7 @@ jobs:
           if [[ "$RELEASE" == 'true' ]]; then release=(--release); fi
           uv run --no-project tsdk build "game/$PROJECT_PATH" "${release[@]}" --output artifact.ttea
       - name: Install and exercise cartridge outside checkout
-        run: uv run --no-project python TSDK/tests/test_smoke.py artifact.ttea
+        run: uv run --no-project python tsdk/tests/test_smoke.py artifact.ttea
       - uses: actions/upload-artifact@v4
         with:
           name: tsdk-${{ matrix.os }}-${{ matrix.python }}
