@@ -753,9 +753,9 @@ class DeveloperPanel(QMainWindow):
     def restart_game(self):
         self.start_game()
 
-    def toggle_feet(self):
-        if self.process is not None:
-            self.restart_game()
+    def toggle_feet(self, checked):
+        """Live: the runtime applies config messages without restarting the game."""
+        self.send({'type': 'config', 'values': {'show_feet': checked}})
 
     def showEvent(self, event):
         super().showEvent(event)
