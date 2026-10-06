@@ -12,7 +12,7 @@ import threading
 import time
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
-from PySide6.QtGui import QColor, QImage, QKeySequence, QPainter, QPen, QShortcut
+from PySide6.QtGui import QColor, QImage, QKeySequence, QPainter, QPen, QRegion, QShortcut
 from PySide6.QtMultimedia import QMediaDevices
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame,
                                QHBoxLayout, QLabel, QMainWindow, QMenu, QMessageBox, QPushButton, QScrollArea,
@@ -250,6 +250,37 @@ class GameView(QWidget):
         super().focusOutEvent(event)
 
 
+class HintCard(QWidget):
+    """Rounded card whose title sits in the top border line, near the left."""
+
+    TITLE = 'Hint'
+
+    def __init__(self):
+        super().__init__()
+        self.text = QLabel()
+        self.text.setWordWrap(True)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 18, 14, 10)
+        layout.addWidget(self.text)
+
+    def setText(self, text):
+        self.text.setText(text)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        metrics = painter.fontMetrics()
+        top = metrics.height()/2
+        box = QRectF(self.rect()).adjusted(1, top, -1, -1)
+        title = QRectF(box.x()+12, 0, metrics.horizontalAdvance(self.TITLE)+12, metrics.height())
+        painter.setPen(QPen(QColor('#64748b'), 1))
+        painter.setClipRegion(QRegion(self.rect()).subtracted(QRegion(title.toRect())))
+        painter.drawRoundedRect(box, 6, 6)
+        painter.setClipping(False)
+        painter.setPen(QColor('#94a3b8'))
+        painter.drawText(title, Qt.AlignmentFlag.AlignCenter, self.TITLE)
+
+
 class LandmarkCanvas(QWidget):
     def __init__(self, panel):
         super().__init__()
@@ -437,6 +468,8 @@ class DeveloperPanel(QMainWindow):
         self.show_feet.toggled.connect(self.toggle_feet)
         form.addRow('Show feet indicator', self.show_feet)
         controls.addStretch()
+        self.hint = HintCard()
+        controls.addWidget(self.hint)
         self.canvas = LandmarkCanvas(self)
         tools.addWidget(self.canvas)
         tools.setStretchFactor(0, 1)
@@ -567,18 +600,15 @@ class DeveloperPanel(QMainWindow):
         source = self.source.currentIndex()
         control = self.control.currentData()
         if source == CAMERA and control == 'palms':
-            tip = ('Camera · each hand places a foot at its palm centre, in any shape. '
-                   'With one hand visible it moves the nearer foot.')
+            hint = 'Each palm moves one foot. One hand moves the nearer foot.'
         elif source == CAMERA:
-            tip = 'Camera · your nose moves the centre of both feet.'
+            hint = 'Your nose moves both feet.'
         elif source == MOUSE:
-            tip = ('Mouse · the mouse over the skeleton preview moves the whole body; '
-                   'the feet keep their spacing.')
+            hint = 'Move the mouse over the preview to move both feet.'
         else:
-            tip = ('Keyboard · W/A/S/D move the left foot, arrow keys the right foot, while the game or the '
-                   'preview has focus; feet stay between hip width and one stride apart.')
+            hint = 'W A S D move the left foot. Arrow keys move the right foot.'
         self.show_camera_tuning()
-        self.canvas.setToolTip(tip)
+        self.hint.setText(hint)
         self.show_state()
 
     def move_body(self, x, y):
