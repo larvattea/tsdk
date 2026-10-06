@@ -411,6 +411,8 @@ class DeveloperPanel(QMainWindow):
         game_column.addWidget(self.game_view, 1)
         self.size_label = QLabel()
         self.size_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.size_label.setContentsMargins(0, 10, 0, 14)
+        self.size_label.setStyleSheet('color: #94a3b8;')
         game_column.addWidget(self.size_label)
         root.addWidget(game)
         side = QWidget()
