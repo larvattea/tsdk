@@ -125,6 +125,10 @@ class GameSpace:
         cx, cy = (lx+rx)/2, (ly+ry)/2
         x, y = to_screen(cx, cy, self.panel.camera_region(), self.panel.sensitivity[control])
         observation = provider.read()
+        # Keep both feet (heels and toes) inside the game, or the runtime drops the outside foot.
+        feet = observation.landmarks['body'][29:33]
+        x = min(max(x, cx-min(p.x for p in feet)), 1-(max(p.x for p in feet)-cx))
+        y = min(max(y, cy-min(p.y for p in feet)), 1-(max(p.y for p in feet)-cy))
         landmarks = {group: [Landmark(p.x+x-cx, p.y+y-cy, p.z, p.visibility) for p in points]
                      for group, points in observation.landmarks.items()}
         return replace(observation, landmarks=landmarks)
