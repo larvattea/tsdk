@@ -22,7 +22,7 @@ from ttea.sdk.cartridge import extract_cartridge
 from ttea.sdk.embedding import FrameReader
 from ttea.sdk.runtime import DEFAULT_RESOLUTION, load_manifest
 from ttea.sdk.simulator import write_state
-from ttea.sdk.tracking import Landmark, Observation, Recording, ReplayProvider
+from ttea.sdk.tracking import Landmark, Observation
 
 from .simulator import BODY_EDGES, HAND_EDGES, PALM, DeveloperSimulator, palm_centre
 
@@ -133,7 +133,7 @@ class GameSpace:
 class CameraSource:
     """Live camera detection on a worker thread; read() returns the latest observation without blocking.
 
-    Frames are only previewed in the panel; recordings still store observations, never video.
+    Frames are only previewed in the panel, never stored.
     """
     stale = False
 
@@ -343,7 +343,6 @@ class DeveloperPanel(QMainWindow):
         self.frames = None
         self.launches = 0
         self.cartridges = 0
-        self.replay = None
         self.provider = DeveloperSimulator('body')
         self.camera = None
         self.driven = None
@@ -351,8 +350,6 @@ class DeveloperPanel(QMainWindow):
         self.game_space = GameSpace(self)
         self.held = set()
         self.ticked = time.monotonic()
-        self.recorder = None
-        self.recorded = None
         self.root_splitter = root = QSplitter(Qt.Orientation.Horizontal)
         self.setCentralWidget(root)
         game = QWidget()
@@ -387,8 +384,7 @@ class DeveloperPanel(QMainWindow):
         self.source.addItems(['Mouse', 'Keyboard', 'Camera'])
         self.source.setCurrentIndex(MOUSE)
         self.source.setToolTip('Mouse: the mouse over the skeleton preview moves the whole body. Keyboard: W/A/S/D move the '
-                               'left foot, arrow keys the right foot. Camera: live detection. '
-                               'Nothing is recorded unless you record observations.')
+                               'left foot, arrow keys the right foot. Camera: live detection.')
         form.addRow('Tracking source', self.source)
         self.camera_device = QComboBox()
         for name, camera_index, default in camera_devices():
@@ -431,23 +427,11 @@ class DeveloperPanel(QMainWindow):
         self.present.setChecked(True)
         self.present.toggled.connect(self.set_present)
         controls.addWidget(self.present)
-        self.stale = QCheckBox('Freeze timestamp (stale input)')
-        self.stale.toggled.connect(self.set_stale)
-        controls.addWidget(self.stale)
         self.show_feet = QCheckBox('Show feet')
         self.show_feet.setChecked(True)
         self.show_feet.setToolTip('Draw the player\'s footprints in the game frame.')
         self.show_feet.toggled.connect(self.toggle_feet)
         controls.addWidget(self.show_feet)
-        self.record_button = QPushButton('Record observations…')
-        self.record_button.clicked.connect(self.toggle_record)
-        controls.addWidget(self.record_button)
-        button = QPushButton('Replay recording…')
-        button.clicked.connect(self.start_replay)
-        controls.addWidget(button)
-        button = QPushButton('Return to live simulation')
-        button.clicked.connect(self.stop_replay)
-        controls.addWidget(button)
         controls.addStretch()
         self.canvas = LandmarkCanvas(self)
         tools.addWidget(self.canvas)
@@ -641,8 +625,6 @@ class DeveloperPanel(QMainWindow):
         self.exit_button.setVisible(not running)
         if not running:
             self.status.setText('Game not running')
-        elif self.replay is not None:
-            self.status.setText(f'Replaying {self.replay.name} with its recorded calibration and timing.')
         else:
             mode = {MOUSE: 'Mouse', KEYBOARD: 'Keyboard', CAMERA: 'Live camera'}[self.source.currentIndex()]
             self.status.setText(f"{mode} tracking · Escape ends the game, P pauses it · Ctrl/⌘+Q quits")
@@ -651,45 +633,6 @@ class DeveloperPanel(QMainWindow):
     def set_present(self, value):
         self.provider.observation = replace(self.provider.observation,present=value)
         self.canvas.update()
-
-    def set_stale(self, value):
-        self.provider.stale = value
-
-    def toggle_record(self):
-        if self.recorder:
-            self.recorder.close()
-            self.recorder = None
-            self.record_button.setText('Record observations…')
-            return
-        filename,_ = QFileDialog.getSaveFileName(self,'Record observations','','JSON Lines (*.jsonl)')
-        if filename:
-            self.recorder = Recording(Path(filename),'body',calibration=None,config={})
-            self.record_button.setText('Stop recording')
-
-    def start_replay(self):
-        if self.manifest is None:
-            return
-        filename,_ = QFileDialog.getOpenFileName(self,'Replay observations','','JSON Lines (*.jsonl)')
-        if not filename:
-            return
-        try:
-            replay = ReplayProvider(Path(filename))
-            try:
-                if replay.profile != self.manifest['tracking_profile']:
-                    raise ValueError('Recording profile does not match this game')
-                replay.read()
-            finally:
-                replay.close()
-        except (OSError, ValueError, StopIteration) as exc:
-            QMessageBox.warning(self, 'Cannot replay', str(exc))
-            return
-        if self.recorder:
-            self.toggle_record()
-        self.start_game(Path(filename))
-
-    def stop_replay(self):
-        if self.manifest is not None and (self.replay is not None or self.process is None):
-            self.start_game()
 
     def load_folder(self):
         directory = QFileDialog.getExistingDirectory(self, 'Load game project', str(self.project or Path.cwd()))
@@ -743,7 +686,7 @@ class DeveloperPanel(QMainWindow):
         scale = min(geometry.width()*2/3/width, geometry.height()/height)
         return round(width*scale), round(height*scale)
 
-    def start_game(self, replay=None):
+    def start_game(self):
         self.stop_game()
         self.launches += 1
         frame_buffer = self.workdir/f'frame-{self.launches}.bin'
@@ -754,23 +697,18 @@ class DeveloperPanel(QMainWindow):
                   'frame_buffer': str(frame_buffer), 'input': 'stdin', 'width': width, 'height': height,
                   'show_feet': self.show_feet.isChecked()}
         command = [sys.executable, '-m', 'ttea.sdk.runtime', str(self.project)]
-        if replay is None:
-            write_state(self.state_path, self.tracker())
-            config['simulation_state'] = str(self.state_path)
-            command.append('--simulation')
-        else:
-            command.extend(['--replay', str(replay)])
+        write_state(self.state_path, self.tracker())
+        config['simulation_state'] = str(self.state_path)
+        command.append('--simulation')
         command.extend(['--config', json.dumps(config)])
         self.process = subprocess.Popen(command, stdin=subprocess.PIPE, text=True, bufsize=1)
         self.frames = FrameReader(frame_buffer)
-        self.replay = replay
-        self.record_button.setEnabled(replay is None)
         self.game_view.clear('Starting…')
         self.game_view.setFocus()
         self.show_state()
 
     def restart_game(self):
-        self.start_game(self.replay)
+        self.start_game()
 
     def toggle_feet(self):
         if self.process is not None:
@@ -813,8 +751,6 @@ class DeveloperPanel(QMainWindow):
         self.process = None
         self.frames.close()
         self.frames = None
-        self.replay = None
-        self.record_button.setEnabled(True)
         self.game_view.clear(message)
         self.show_state()
 
@@ -844,12 +780,7 @@ class DeveloperPanel(QMainWindow):
             if observation is not self.driven:
                 self.drive(observation)
                 self.driven = observation
-        if self.replay is None:
-            observation = write_state(self.state_path, self.tracker())
-            # The camera source repeats its latest observation until a new frame is detected.
-            if self.recorder and observation is not self.recorded:
-                self.recorder.write(observation)
-                self.recorded = observation
+        write_state(self.state_path, self.tracker())
         if self.frames is not None:
             frame = self.frames.read()
             if frame is not None:
@@ -867,9 +798,6 @@ class DeveloperPanel(QMainWindow):
 
     def shutdown(self):
         self.timer.stop()
-        if self.recorder:
-            self.recorder.close()
-            self.recorder = None
         if self.camera:
             self.camera.close()
             self.camera = None
