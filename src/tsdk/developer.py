@@ -39,8 +39,12 @@ CONTROLS = {'body': ('Body', 'body', ()), 'fingers': ('Hands (index fingers down
 REGION_CENTRE = {'fingers': (.5, .675), 'palms': (.5, .55), 'face': (.5, .5)}
 # Default gain around the region centre per control; a nose moves far less than a hand.
 SENSITIVITY = {'fingers': 1., 'palms': 1., 'face': 2.5}
-SYNTHETIC, PUPPET, CAMERA = range(3)
-PUPPET_KEYS = {Qt.Key.Key_A: 'left', Qt.Key.Key_D: 'right'}
+MOUSE, KEYBOARD, CAMERA = range(3)
+# Keyboard source: W/A/S/D move the left foot, arrow keys the right one, by (side, dx, dy).
+FOOT_KEYS = {Qt.Key.Key_W: ('left', 0, -1), Qt.Key.Key_A: ('left', -1, 0), Qt.Key.Key_S: ('left', 0, 1),
+             Qt.Key.Key_D: ('left', 1, 0), Qt.Key.Key_Up: ('right', 0, -1), Qt.Key.Key_Left: ('right', -1, 0),
+             Qt.Key.Key_Down: ('right', 0, 1), Qt.Key.Key_Right: ('right', 1, 0)}
+FOOT_SPEED = .6  # game widths per second while a foot key is held
 PRESETS = {'body': ['standing', 'arms_up', 'squat'], 'hands': ['open', 'fist', 'pinch'],
            'face': ['neutral', 'smile', 'surprise', 'blink']}
 MOUSE_BUTTONS = {Qt.MouseButton.LeftButton: 1, Qt.MouseButton.MiddleButton: 2, Qt.MouseButton.RightButton: 3}
@@ -223,10 +227,16 @@ class GameView(QWidget):
             self.panel.send({'type': kind, 'pos': self.last, 'button': MOUSE_BUTTONS[event.button()]})
 
     def keyPressEvent(self, event):
-        self.panel.forward_key(event, 'key_down')
+        if not self.panel.foot_key(event, True):
+            self.panel.forward_key(event, 'key_down')
 
     def keyReleaseEvent(self, event):
-        self.panel.forward_key(event, 'key_up')
+        if not self.panel.foot_key(event, False):
+            self.panel.forward_key(event, 'key_up')
+
+    def focusOutEvent(self, event):
+        self.panel.held.clear()
+        super().focusOutEvent(event)
 
 
 class LandmarkCanvas(QWidget):
@@ -311,7 +321,7 @@ class LandmarkCanvas(QWidget):
         index = min(range(len(points)), key=lambda i:(self.point(points[i])-event.position()).manhattanLength())
         if (self.point(points[index])-event.position()).manhattanLength() < 25:
             self.panel.joint.setCurrentIndex(index)
-            if self.panel.source.currentIndex() == SYNTHETIC:
+            if self.panel.source.currentIndex() == KEYBOARD:
                 self.dragging = True
                 self.mouseMoveEvent(event)
 
@@ -321,41 +331,19 @@ class LandmarkCanvas(QWidget):
         if self.dragging:
             self.panel.coordinates[0].setValue(x)
             self.panel.coordinates[1].setValue(y)
-        elif self.panel.puppet:
-            self.panel.puppet_to(x, y)
+        elif self.panel.source.currentIndex() == MOUSE:
+            self.panel.move_body(x, y)
 
     def mouseReleaseEvent(self, event):
         self.dragging = False
 
-    def enterEvent(self, event):
-        # Hovering the skeleton takes A/D; leaving hands the keyboard back to the game.
-        if self.panel.puppet:
-            self.setFocus()
-
-    def leaveEvent(self, event):
-        if self.panel.puppet and self.hasFocus():
-            self.panel.game_view.setFocus()
-
     def keyPressEvent(self, event):
-        if not self.puppet_key(event, True):
+        if not self.panel.foot_key(event, True):
             self.panel.forward_key(event, 'key_down')
 
     def keyReleaseEvent(self, event):
-        if not self.puppet_key(event, False):
+        if not self.panel.foot_key(event, False):
             self.panel.forward_key(event, 'key_up')
-
-    def puppet_key(self, event, down):
-        """In mouse + keyboard mode A/D hold the left/right foot (or hand); the game never sees them."""
-        side = PUPPET_KEYS.get(event.key())
-        if not self.panel.puppet or side is None:
-            return False
-        if event.isAutoRepeat():
-            return True
-        if down:
-            self.panel.held.add(side)
-        else:
-            self.panel.held.discard(side)
-        return True
 
     def focusOutEvent(self, event):
         self.panel.held.clear()
@@ -380,8 +368,8 @@ class DeveloperPanel(QMainWindow):
         self.driven = None
         self.sensitivity = dict(SENSITIVITY)
         self.game_space = GameSpace(self)
-        self.puppet = True
         self.held = set()
+        self.ticked = time.monotonic()
         self.recorder = None
         self.recorded = None
         self.loading = False
@@ -414,10 +402,11 @@ class DeveloperPanel(QMainWindow):
         self.form = form = QFormLayout()
         controls.addLayout(form)
         self.source = QComboBox()
-        self.source.addItems(['Synthetic', 'Mouse + keyboard', 'Camera'])
-        self.source.setCurrentIndex(PUPPET)
-        self.source.setToolTip('Synthetic: edit joints directly. Mouse + keyboard: the mouse over the skeleton preview moves the body, A/D hold a foot. '
-                               'Camera: live detection. Nothing is recorded unless you record observations.')
+        self.source.addItems(['Mouse', 'Keyboard', 'Camera'])
+        self.source.setCurrentIndex(MOUSE)
+        self.source.setToolTip('Mouse: the mouse over the skeleton preview moves the whole body. Keyboard: W/A/S/D move the '
+                               'left foot, arrow keys the right foot. Camera: live detection. '
+                               'Nothing is recorded unless you record observations.')
         form.addRow('Tracking source', self.source)
         self.camera_device = QComboBox()
         for name, camera_index, default in camera_devices():
@@ -690,9 +679,8 @@ class DeveloperPanel(QMainWindow):
             except Exception as exc:
                 QMessageBox.warning(self, 'Cannot open camera', str(exc))
                 self.source.blockSignals(True)
-                self.source.setCurrentIndex(SYNTHETIC)
+                self.source.setCurrentIndex(MOUSE)
                 self.source.blockSignals(False)
-        self.puppet = self.source.currentIndex() == PUPPET
         self.show_source()
         self.load_joint()
 
@@ -709,40 +697,44 @@ class DeveloperPanel(QMainWindow):
             text = tip = 'Camera · your nose moves the centre of both feet.'
         elif source == CAMERA:
             text = tip = 'Live camera detection · click a joint to inspect it.'
-        elif source == SYNTHETIC:
-            text = 'Synthetic · no camera. Drag joints in the preview or type exact coordinates.'
-            tip = 'Drag any joint. Coordinates outside the border remain out of area.'
-        elif self.profile == 'body':
-            text = tip = ('Mouse + keyboard · the mouse over the skeleton preview moves the body. Hold A to place the left foot, '
-                          'D the right foot; feet stay between hip width and one stride apart.')
-        elif self.profile == 'hands':
-            text = tip = ('Mouse + keyboard · the mouse over the skeleton preview moves both hands; '
-                          'hold A or D to move only the left or right hand.')
+        elif source == MOUSE:
+            text = tip = ('Mouse · the mouse over the skeleton preview moves the whole body; '
+                          'the feet keep their spacing.')
         else:
-            text = tip = 'Mouse + keyboard · the mouse over the skeleton preview moves the face.'
+            text = tip = ('Keyboard · W/A/S/D move the left foot, arrow keys the right foot, while the game or the '
+                          'preview has focus; feet stay between hip width and one stride apart.')
         self.info.setText(text)
         self.canvas.setToolTip(tip)
         for control in self.synthetic_controls:
-            control.setEnabled(source == SYNTHETIC)
+            control.setEnabled(source == KEYBOARD)
         self.show_state()
 
-    def puppet_to(self, x, y):
-        """Move the held side's foot or hand, or the whole subject, to a normalized game position."""
-        provider = self.provider
-        side = next(iter(self.held)) if len(self.held) == 1 else None
-        if self.profile == 'body':
-            if side is not None:
-                provider.place_foot(side, x, y)
-            else:
-                (lx, ly), (rx, ry) = provider.foot('left'), provider.foot('right')
-                provider.move('body', x-(lx+rx)/2, y-(ly+ry)/2)
-        else:
-            landmarks = provider.observation.landmarks
-            groups = [side] if side in landmarks else list(landmarks)
-            points = [point for group in groups for point in landmarks[group]]
-            dx, dy = x-sum(p.x for p in points)/len(points), y-sum(p.y for p in points)/len(points)
-            for group in groups:
-                provider.move(group, dx, dy)
+    def move_body(self, x, y):
+        """Move the whole body so the midpoint between its feet sits at a normalized game position."""
+        (lx, ly), (rx, ry) = self.provider.foot('left'), self.provider.foot('right')
+        self.provider.move('body', x-(lx+rx)/2, y-(ly+ry)/2)
+        self.load_joint()
+
+    def foot_key(self, event, down):
+        """In keyboard mode W/A/S/D and the arrow keys move the feet; the game never sees them."""
+        if self.source.currentIndex() != KEYBOARD or event.key() not in FOOT_KEYS:
+            return False
+        if not event.isAutoRepeat():
+            (self.held.add if down else self.held.discard)(event.key())
+        return True
+
+    def step_feet(self, elapsed):
+        """Move each foot whose keys are held at FOOT_SPEED; diagonals combine two keys."""
+        moves = {'left': [0, 0], 'right': [0, 0]}
+        for key in self.held:
+            side, dx, dy = FOOT_KEYS[key]
+            moves[side][0] += dx
+            moves[side][1] += dy
+        for side, (dx, dy) in moves.items():
+            if dx or dy:
+                x, y = self.provider.foot(side)
+                self.provider.place_foot(side, min(max(x+dx*FOOT_SPEED*elapsed, 0.), 1.),
+                                         min(max(y+dy*FOOT_SPEED*elapsed, 0.), 1.))
         self.load_joint()
 
     def show_state(self):
@@ -761,7 +753,7 @@ class DeveloperPanel(QMainWindow):
         elif self.replay is not None:
             self.status.setText(f'Replaying {self.replay.name} with its recorded calibration and timing.')
         else:
-            mode = {SYNTHETIC: 'Synthetic', PUPPET: 'Mouse + keyboard', CAMERA: 'Live camera'}[self.source.currentIndex()]
+            mode = {MOUSE: 'Mouse', KEYBOARD: 'Keyboard', CAMERA: 'Live camera'}[self.source.currentIndex()]
             self.status.setText(f"{mode} tracking · Escape ends the game, P pauses it · Ctrl/⌘+Q quits")
         self.canvas.update()
 
@@ -967,8 +959,12 @@ class DeveloperPanel(QMainWindow):
         self.send({'type': kind, 'key': name, 'text': event.text(), 'mods': mods})
 
     def tick(self):
+        now = time.monotonic()
+        elapsed, self.ticked = now-self.ticked, now
         if self.process is not None and self.process.poll() is not None:
             self.release_game(f'Game exited with status {self.process.returncode}')
+        if self.held and self.source.currentIndex() == KEYBOARD:
+            self.step_feet(elapsed)
         if self.driving:
             observation = self.camera.read()
             if observation is not self.driven:
