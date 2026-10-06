@@ -565,8 +565,7 @@ class DeveloperPanel(QMainWindow):
         self.stop_button = QPushButton('Stop game')
         self.stop_button.clicked.connect(self.stop_game)
         buttons.addWidget(self.stop_button)
-        quit_keys = QKeySequence(QKeySequence.StandardKey.Quit).toString(QKeySequence.SequenceFormat.NativeText)
-        self.exit_button = QPushButton(f'Exit ({quit_keys})')
+        self.exit_button = QPushButton('Exit')
         self.exit_button.clicked.connect(self.close)
         buttons.addWidget(self.exit_button)
         for button in (load, self.restart_button, self.pause_button, self.stop_button, self.exit_button):
