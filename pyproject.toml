@@ -16,4 +16,4 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.uv.sources]
-t-tea = { path = "../ttea", editable = true }
+t-tea = { git = "https://github.com/laurogripa/ttea", branch = "main" }

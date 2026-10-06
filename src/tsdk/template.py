@@ -67,8 +67,8 @@ dependencies = ["t-tea>=2.0,<3"]
 dev = ["tsdk>=0.1,<0.2"]
 
 [tool.uv.sources]
-t-tea = {{ path = "../ttea", editable = true }}
-tsdk = {{ path = "../tsdk", editable = true }}
+t-tea = {{ git = "https://github.com/laurogripa/ttea", branch = "main" }}
+tsdk = {{ git = "https://github.com/laurogripa/tsdk", branch = "main" }}
 ''',
         "game.py": GAME,
         ".gitignore": ".venv/\n__pycache__/\n*.pyc\ndist/\n",
