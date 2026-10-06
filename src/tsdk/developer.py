@@ -26,7 +26,6 @@ from ttea.sdk.tracking import Landmark, Observation, Recording, ReplayProvider
 from .simulator import BODY_EDGES, HAND_EDGES, PALM, DeveloperSimulator, palm_centre, pointing_down_fingertip
 
 LOW_VISIBILITY = .5
-PROFILES = {'body': 'Body', 'face': 'Face', 'hands': 'Hands'}
 NOSE_TIP = 1  # MediaPipe face mesh vertex
 # Camera controls that can drive a body game: label, MediaPipe model, and the landmarks
 # drawn enlarged in the preview because they move the feet.
@@ -368,12 +367,6 @@ class DeveloperPanel(QMainWindow):
         content = QWidget()
         scroll.setWidget(content)
         controls = QVBoxLayout(content)
-        self.title = QLabel()
-        self.title.setWordWrap(True)
-        controls.addWidget(self.title)
-        self.info = QLabel()
-        self.info.setWordWrap(True)
-        controls.addWidget(self.info)
         self.form = form = QFormLayout()
         controls.addLayout(form)
         self.source = QComboBox()
@@ -568,22 +561,21 @@ class DeveloperPanel(QMainWindow):
         source = self.source.currentIndex()
         control = self.control.currentData()
         if source == CAMERA and self.driving and control == 'fingers':
-            text = tip = ('Camera · point both index fingers down, other fingers folded: each fingertip places a foot. '
-                          'One finger moves the nearer foot; any other hand shape holds the pose.')
+            tip = ('Camera · point both index fingers down, other fingers folded: each fingertip places a foot. '
+                   'One finger moves the nearer foot; any other hand shape holds the pose.')
         elif source == CAMERA and self.driving and control == 'palms':
-            text = tip = ('Camera · each hand places a foot at its palm centre, in any shape. '
-                          'With one hand visible it moves the nearer foot.')
+            tip = ('Camera · each hand places a foot at its palm centre, in any shape. '
+                   'With one hand visible it moves the nearer foot.')
         elif source == CAMERA and self.driving:
-            text = tip = 'Camera · your nose moves the centre of both feet.'
+            tip = 'Camera · your nose moves the centre of both feet.'
         elif source == CAMERA:
-            text = tip = 'Camera · your body moves the skeleton directly.'
+            tip = 'Camera · your body moves the skeleton directly.'
         elif source == MOUSE:
-            text = tip = ('Mouse · the mouse over the skeleton preview moves the whole body; '
-                          'the feet keep their spacing.')
+            tip = ('Mouse · the mouse over the skeleton preview moves the whole body; '
+                   'the feet keep their spacing.')
         else:
-            text = tip = ('Keyboard · W/A/S/D move the left foot, arrow keys the right foot, while the game or the '
-                          'preview has focus; feet stay between hip width and one stride apart.')
-        self.info.setText(text)
+            tip = ('Keyboard · W/A/S/D move the left foot, arrow keys the right foot, while the game or the '
+                   'preview has focus; feet stay between hip width and one stride apart.')
         self.show_camera_tuning()
         self.canvas.setToolTip(tip)
         self.show_state()
@@ -617,12 +609,8 @@ class DeveloperPanel(QMainWindow):
         self.canvas.update()
 
     def show_state(self):
-        if self.manifest is None:
-            self.title.setText('No game loaded')
-        else:
-            expected = self.manifest['tracking_profile']
+        if self.manifest is not None:
             self.setWindowTitle(f"TSDK developer — {self.manifest['id']}")
-            self.title.setText(f"<b>{self.manifest['id']}</b> {self.manifest['version']} · uses {PROFILES[expected].lower()} tracking")
         running = self.process is not None
         self.restart_button.setVisible(running)
         self.stop_button.setVisible(running)
