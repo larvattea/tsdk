@@ -668,6 +668,10 @@ class DeveloperPanel(QMainWindow):
                 if camera_index is None:
                     raise RuntimeError('No camera found')
                 self.camera = CameraSource(CONTROLS[self.control.currentData()][1], camera_index)
+                if self.control.currentData() == 'face':
+                    # The nose only moves the centre of both feet, so start from the default stance.
+                    self.provider = DeveloperSimulator('body')
+                    self.set_present(self.present.isChecked())
             except Exception as exc:
                 QMessageBox.warning(self, 'Cannot open camera', str(exc))
                 self.source.blockSignals(True)
