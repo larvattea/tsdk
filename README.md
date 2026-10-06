@@ -42,7 +42,7 @@ id = "gingadivina"
 version = "2.0.0"
 entrypoint = "game.main:GingaDivina"
 tracking_profile = "body"   # body, hands, or face
-resolution = [800, 600]     # optional; default 1280x720
+resolution = [800, 600]     # optional; default 800x600 (4:3)
 game_api = 1
 requires_ttea = ">=2.0,<3"
 assets = ["assets"]
