@@ -569,6 +569,9 @@ class DeveloperPanel(QMainWindow):
         self.exit_button = QPushButton(f'Exit ({quit_keys})')
         self.exit_button.clicked.connect(self.close)
         buttons.addWidget(self.exit_button)
+        for button in (load, self.restart_button, self.pause_button, self.stop_button, self.exit_button):
+            # Never narrower than the label, so shortcut hints stay readable.
+            button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         QShortcut(QKeySequence(QKeySequence.StandardKey.Quit), self, self.close)
         QShortcut(QKeySequence(Qt.Key.Key_F2), self, self.toggle_pause)
         QShortcut(QKeySequence(Qt.Key.Key_F5), self, self.restart_game)
