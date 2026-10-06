@@ -41,6 +41,7 @@ jobs:
       - name: Test
         working-directory: tsdk
         run: |
-          uv sync --locked
-          uv run --locked python -m unittest discover -s tests
+          uv venv
+          uv pip install --no-sources ../ttea -e .
+          uv run --no-project python -m unittest discover -s tests
           uvx --from ruff==0.11.13 ruff check --select E9,F src tests

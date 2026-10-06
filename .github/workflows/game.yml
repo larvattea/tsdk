@@ -67,7 +67,7 @@ jobs:
       - name: Install tooling and authoritative platform
         run: |
           uv venv
-          uv pip install ./ttea ./tsdk "ruff>=0.11,<0.12" "mypy>=1.15,<1.16"
+          uv pip install --no-sources ./ttea ./tsdk "ruff>=0.11,<0.12" "mypy>=1.15,<1.16"
       - name: Validate game and public boundaries
         shell: bash
         env:
