@@ -59,10 +59,10 @@ def build(root, output=None, release=False):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="tsdk", description="Validate and build portable TTEA games")
+    parser = argparse.ArgumentParser(prog="tsdk", description="Develop, validate, and build portable TTEA games")
     parser.add_argument("--version", action="version", version=importlib.metadata.version("tsdk"))
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("check", "build"):
+    for name in ("check", "build", "dev"):
         command = commands.add_parser(name)
         command.add_argument("project", type=Path, nargs="?", default=Path.cwd())
         if name == "build":
@@ -80,6 +80,10 @@ def main(argv=None):
             print(f"OK {manifest['id']} {manifest['version']}: {len(files)} portable files")
         elif args.command == "build":
             print(build(args.project, args.output, args.release))
+        elif args.command == "dev":
+            from .developer import run
+
+            return run(args.project)
         else:
             print(new_project(args.destination, args.id, args.name, args.profile))
     except (ValueError, OSError, SyntaxError) as error:

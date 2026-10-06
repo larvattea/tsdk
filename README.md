@@ -1,7 +1,8 @@
-# Build portable TSDK games
+# Develop and build portable TSDK games
 
-TSDK validates games against the installed TTEA schema and builds `.ttea` ZIP cartridges.
-It supplies no runtime, camera, detector, or tracking implementation.
+TSDK validates games against the installed TTEA schema, builds `.ttea` ZIP cartridges,
+and runs them in developer mode. Games always run on TTEA's runtime, tracking, and camera providers;
+TSDK adds only the developer window and its synthetic controls.
 
 ## Develop with sibling repositories
 
@@ -14,13 +15,29 @@ uv run tsdk new ../example-game --profile body
 cd ../example-game
 uv lock
 uv run tsdk check
-uv run dev
+uv run tsdk dev
 uv run tsdk build
 ```
 
 Commit each game's `uv.lock`. Adjust development source paths when using another directory layout.
 The local source configuration is development-only; installed package metadata declares bounded registry dependencies.
 No package publication or remote repository creation is performed by these commands.
+
+## Run developer mode
+
+`uv run tsdk dev [project]` opens a full-screen developer window with no game loaded;
+Load game starts browsing from `project` (default: the current directory) and also accepts `.ttea` cartridges.
+The game runs on the left two thirds in TTEA's runtime. The right third holds the tracking source,
+the skeleton preview, recording/replay, and Load/Restart/Stop game (Exit once the game stops) buttons.
+
+| Source | Drives the game with |
+| --- | --- |
+| Synthetic | Presets, joints, presence, and staleness edited in the panel |
+| Mouse + keyboard | The mouse over the skeleton; hold A or D to plant the left or right foot |
+| Camera tracking | Body; both index fingers pointing down or both whole hands placing the feet; or the nose as the centre of the feet |
+
+Synthetic and mouse sources need no camera, player registration, or physical calibration.
+Camera tracking opens the selected webcam only when chosen.
 
 ## Build a release
 

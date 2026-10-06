@@ -18,8 +18,7 @@ FORBIDDEN_CALLS = {
     "pygame.camera", "pygame.mixer.init", "pygame.mixer.quit",
     "pygame.time.Clock", "os.system", "os.popen", "os.spawn", "os.exec",
     "__import__", "eval", "exec", "compile", "getattr",
-    "ttea.sdk.runtime", "ttea.sdk.providers", "ttea.sdk.developer",
-    "ttea.sdk.simulator",
+    "ttea.sdk.runtime", "ttea.sdk.providers", "ttea.sdk.simulator",
 }
 PUBLIC_PLATFORM_MODULES = {"ttea.sdk.api", "ttea.sdk.tracking"}
 FORBIDDEN_SUFFIXES = {".pyc", ".pyo", ".so", ".dylib", ".dll", ".exe", ".pyd", ".whl", ".tflite", ".task", ".onnx", ".pb", ".pt", ".pth"}
