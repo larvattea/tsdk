@@ -520,6 +520,8 @@ class DeveloperPanel(QMainWindow):
         self.exit_button.clicked.connect(self.close)
         buttons.addWidget(self.exit_button)
         QShortcut(QKeySequence(QKeySequence.StandardKey.Quit), self, self.close)
+        QShortcut(QKeySequence(Qt.Key.Key_F2), self, self.toggle_pause)
+        QShortcut(QKeySequence(Qt.Key.Key_F5), self, self.restart_game)
         self.source.currentIndexChanged.connect(self.set_source)
         self.camera_device.currentIndexChanged.connect(self.change_camera)
         self.control.currentIndexChanged.connect(self.change_control)
