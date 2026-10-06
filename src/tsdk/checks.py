@@ -42,7 +42,7 @@ def project_files(root, manifest):
             if path.is_symlink():
                 raise ValueError(f"Symbolic links are not portable cartridge content: {path}")
             relative = path.relative_to(root)
-            if "__pycache__" in relative.parts:
+            if "__pycache__" in relative.parts or path.name == ".DS_Store":
                 continue
             if any(part.startswith(".") or part in {"__pycache__", "node_modules", "venv", "site-packages"} for part in relative.parts):
                 raise ValueError(f"Forbidden cartridge path: {relative}")
