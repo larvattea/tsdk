@@ -38,6 +38,7 @@ REGION_CENTRE = {'palms': (.5, .55), 'face': (.5, .5)}
 # Default gain around the region centre per control; a nose moves far less than a hand.
 SENSITIVITY = {'palms': 1., 'face': 2.5}
 MOUSE, KEYBOARD, CAMERA = range(3)
+BOTTOM_BAR = 48  # px: height of the size label under the game and the button row under the preview
 GAMES = Path(__file__).resolve().parents[2]/'games'  # built cartridges in a tsdk checkout
 # Keyboard source: W/A/S/D move the left foot, arrow keys the right one, by (side, dx, dy).
 FOOT_KEYS = {Qt.Key.Key_W: ('left', 0, -1), Qt.Key.Key_A: ('left', -1, 0), Qt.Key.Key_S: ('left', 0, 1),
@@ -203,8 +204,11 @@ class GameView(QWidget):
         self.update()
 
     def target(self):
-        """The game's rect on screen: as large as fits, at the game's aspect ratio, letterboxed."""
-        return fitted(QRectF(self.rect()), *self.panel.resolution())
+        """The game's rect on screen: as large as fits, at the game's aspect ratio, centred horizontally and
+        resting on the bottom so it lines up with the preview."""
+        rect = fitted(QRectF(self.rect()), *self.panel.resolution())
+        rect.moveBottom(self.rect().bottom())
+        return rect
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -443,11 +447,12 @@ class DeveloperPanel(QMainWindow):
         game = QWidget()
         game_column = QVBoxLayout(game)
         game_column.setContentsMargins(0, 0, 0, 0)
+        game_column.setSpacing(0)
         self.game_view = GameView(self)
         game_column.addWidget(self.game_view, 1)
         self.size_label = QLabel()
         self.size_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.size_label.setContentsMargins(0, 10, 0, 14)
+        self.size_label.setFixedHeight(BOTTOM_BAR)
         self.size_label.setStyleSheet('color: #94a3b8;')
         game_column.addWidget(self.size_label)
         root.addWidget(game)
@@ -457,6 +462,9 @@ class DeveloperPanel(QMainWindow):
         root.setStretchFactor(0, 2)
         root.setStretchFactor(1, 1)
         column = QVBoxLayout(side)
+        # No bottom margin: the game, the preview, and the bottom bars of both columns line up.
+        column.setContentsMargins(12, 12, 12, 0)
+        column.setSpacing(0)
         self.tools_splitter = tools = QSplitter(Qt.Orientation.Vertical)
         self.sized = False
         column.addWidget(tools, 1)
@@ -537,8 +545,11 @@ class DeveloperPanel(QMainWindow):
         tools.addWidget(self.canvas)
         tools.setStretchFactor(0, 1)
         tools.setStretchFactor(1, 1)
-        buttons = QHBoxLayout()
-        column.addLayout(buttons)
+        bar = QWidget()
+        bar.setFixedHeight(BOTTOM_BAR)
+        column.addWidget(bar)
+        buttons = QHBoxLayout(bar)
+        buttons.setContentsMargins(0, 0, 0, 0)
         load = QPushButton('Load game')
         self.load_menu = QMenu(load)
         self.load_menu.aboutToShow.connect(self.fill_load_menu)
