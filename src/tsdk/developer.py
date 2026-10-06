@@ -489,7 +489,8 @@ class DeveloperPanel(QMainWindow):
         self.show_feet.toggled.connect(self.toggle_feet)
         form.addRow('Show feet indicator', self.show_feet)
         self.developer = QCheckBox()
-        self.developer.setToolTip('Let the tracking source move the skeleton. Turns off whenever the input changes.')
+        self.developer.setChecked(True)
+        self.developer.setToolTip('Let the tracking source move the skeleton.')
         form.addRow('Enable developer mode', self.developer)
         controls.addStretch()
         self.hint = HintCard()
@@ -606,7 +607,9 @@ class DeveloperPanel(QMainWindow):
             self.camera.close()
             self.camera = None
         self.held.clear()
-        self.developer.setChecked(False)
+        # Changing the input pauses the game; the user resumes it (F2) when ready.
+        if self.process is not None and not self.paused:
+            self.toggle_pause()
         if index == CAMERA:
             try:
                 camera_index = self.camera_device.currentData()
@@ -767,7 +770,8 @@ class DeveloperPanel(QMainWindow):
         self.show_state()
 
     def restart_game(self):
-        self.start_game()
+        if self.manifest is not None:
+            self.start_game()
 
     def toggle_feet(self, checked):
         """Live: the runtime applies config messages without restarting the game."""
@@ -832,6 +836,8 @@ class DeveloperPanel(QMainWindow):
 
     def toggle_pause(self):
         """Press P in the game: the runtime toggles its user pause."""
+        if self.process is None:
+            return
         for kind in ('key_down', 'key_up'):
             self.send({'type': kind, 'key': 'p', 'text': 'p', 'mods': []})
         self.paused = not self.paused
