@@ -2,8 +2,8 @@
 name = "tsdk"
 version = "0.1.0"
 description = "TSDK: SDK for serious exergames on TTEA"
-requires-python = ">=3.10,<3.13"
-dependencies = ["t-tea>=2.0,<3", "packaging>=24.2,<26", "pyside6>=6.11,<7", "tomli>=2.2,<3; python_version < '3.11'"]
+requires-python = ">=3.14"
+dependencies = ["t-tea>=2.0,<3", "packaging>=26,<27", "pyside6>=6.11,<7"]
 
 [project.scripts]
 tsdk = "tsdk.cli:main"

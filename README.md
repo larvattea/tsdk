@@ -121,7 +121,7 @@ jobs:
 | --- | --- | --- |
 | `ttea-ref`, `builder-ref` | required | TTEA and TSDK commits; pin reviewed ones |
 | `project-path` | `.` | Game directory inside the repository |
-| `python-versions` | `["3.10", "3.12"]` | Python versions to test |
+| `python-versions` | `["3.14"]` | Python versions to test |
 | `release` | `false` | Build with `--release` |
 
 On Windows x86-64, Linux x86-64, and macOS ARM64, the workflow checks the game, runs its tests, and builds the cartridge.

@@ -14,7 +14,7 @@ on:
       python-versions:
         description: JSON list of Python versions to test
         type: string
-        default: '["3.10", "3.12"]'
+        default: '["3.14"]'
       release:
         type: boolean
         default: false

@@ -5,10 +5,7 @@ import sys
 
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
-try:
-    import tomllib
-except ImportError:
-    import tomli as tomllib
+import tomllib
 
 from ttea.sdk.cartridge import read_project
 
