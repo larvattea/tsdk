@@ -314,8 +314,8 @@ class LandmarkCanvas(QWidget):
     def __init__(self, panel):
         super().__init__()
         self.panel = panel
+        self.grab_offset = None  # skeleton centre minus cursor while dragging, normalized
         self.setMinimumSize(200, 200)
-        self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     def area(self):
@@ -383,11 +383,28 @@ class LandmarkCanvas(QWidget):
             painter.drawText(QRectF(area.x(), centre.y()+14, area.width(), 24), Qt.AlignmentFlag.AlignCenter,
                              'Loading camera…')
 
+    def normalized(self, event):
+        area = self.area()
+        return ((event.position().x()-area.x())/area.width(), (event.position().y()-area.y())/area.height())
+
+    def mousePressEvent(self, event):
+        """Mouse source: grab the skeleton anywhere; it keeps its offset from the cursor while dragged."""
+        if self.panel.source.currentIndex() != MOUSE or event.button() != Qt.MouseButton.LeftButton:
+            return
+        x, y = self.normalized(event)
+        (lx, ly), (rx, ry) = self.panel.provider.foot('left'), self.panel.provider.foot('right')
+        self.grab_offset = ((lx+rx)/2-x, (ly+ry)/2-y)
+        self.setCursor(Qt.CursorShape.ClosedHandCursor)
+
     def mouseMoveEvent(self, event):
-        if self.panel.source.currentIndex() == MOUSE:
-            area = self.area()
-            self.panel.move_body((event.position().x()-area.x())/area.width(),
-                                 (event.position().y()-area.y())/area.height())
+        if self.grab_offset is not None:
+            x, y = self.normalized(event)
+            self.panel.move_body(x+self.grab_offset[0], y+self.grab_offset[1])
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self.grab_offset is not None:
+            self.grab_offset = None
+            self.unsetCursor()
 
     def keyPressEvent(self, event):
         if not self.panel.foot_key(event, True):
@@ -460,7 +477,7 @@ class DeveloperPanel(QMainWindow):
         self.source = QComboBox()
         self.source.addItems(['Mouse', 'Keyboard', 'Camera'])
         self.source.setCurrentIndex(MOUSE)
-        self.source.setToolTip('Mouse: the mouse over the skeleton preview moves the whole body. Keyboard: W/A/S/D move the '
+        self.source.setToolTip('Mouse: drag the skeleton in the preview to move the whole body. Keyboard: W/A/S/D move the '
                                'left foot, arrow keys the right foot. Camera: live detection.')
         form.addRow('Tracking source', self.source)
         self.camera_device = QComboBox()
@@ -655,7 +672,7 @@ class DeveloperPanel(QMainWindow):
         elif source == CAMERA:
             hint = 'Your nose moves both feet.'
         elif source == MOUSE:
-            hint = 'Move the mouse over the preview to move both feet.'
+            hint = 'Drag the skeleton in the preview to move both feet.'
         else:
             hint = 'W A S D move the left foot. Arrow keys move the right foot.'
         self.show_camera_tuning()
