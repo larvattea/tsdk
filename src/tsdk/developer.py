@@ -379,6 +379,7 @@ class DeveloperPanel(QMainWindow):
         self.launches = 0
         self.cartridges = 0
         self.provider = DeveloperSimulator('body')
+        self.paused = False
         self.camera = None
         self.driven = None
         self.sensitivity = dict(SENSITIVITY)
@@ -481,9 +482,6 @@ class DeveloperPanel(QMainWindow):
         tools.addWidget(self.canvas)
         tools.setStretchFactor(0, 1)
         tools.setStretchFactor(1, 1)
-        self.status = QLabel()
-        self.status.setWordWrap(True)
-        column.addWidget(self.status)
         buttons = QHBoxLayout()
         column.addLayout(buttons)
         load = QPushButton('Load game')
@@ -495,6 +493,9 @@ class DeveloperPanel(QMainWindow):
         self.restart_button = QPushButton('Restart game')
         self.restart_button.clicked.connect(self.restart_game)
         buttons.addWidget(self.restart_button)
+        self.pause_button = QPushButton('Pause')
+        self.pause_button.clicked.connect(self.toggle_pause)
+        buttons.addWidget(self.pause_button)
         self.stop_button = QPushButton('Stop game')
         self.stop_button.clicked.connect(self.stop_game)
         buttons.addWidget(self.stop_button)
@@ -665,13 +666,9 @@ class DeveloperPanel(QMainWindow):
             self.setWindowTitle(f"TSDK developer — {self.manifest['id']}")
         running = self.process is not None
         self.restart_button.setVisible(running)
+        self.pause_button.setVisible(running)
         self.stop_button.setVisible(running)
         self.exit_button.setVisible(not running)
-        if not running:
-            self.status.setText('Game not running')
-        else:
-            mode = {MOUSE: 'Mouse', KEYBOARD: 'Keyboard', CAMERA: 'Live camera'}[self.source.currentIndex()]
-            self.status.setText(f"{mode} tracking · Escape ends the game, P pauses it · Ctrl/⌘+Q quits")
         self.canvas.update()
 
     def set_present(self, value):
@@ -732,6 +729,8 @@ class DeveloperPanel(QMainWindow):
 
     def start_game(self):
         self.stop_game()
+        self.paused = False
+        self.pause_button.setText('Pause')
         self.launches += 1
         frame_buffer = self.workdir/f'frame-{self.launches}.bin'
         stop_file = self.workdir/'game.stop'
@@ -811,6 +810,17 @@ class DeveloperPanel(QMainWindow):
             return
         mods = [label for modifier, label in MODIFIERS.items() if event.modifiers() & modifier]
         self.send({'type': kind, 'key': name, 'text': event.text(), 'mods': mods})
+        if name == 'p' and kind == 'key_down':  # the runtime toggles its pause on P
+            self.paused = not self.paused
+            self.pause_button.setText('Resume' if self.paused else 'Pause')
+
+    def toggle_pause(self):
+        """Press P in the game: the runtime toggles its user pause."""
+        for kind in ('key_down', 'key_up'):
+            self.send({'type': kind, 'key': 'p', 'text': 'p', 'mods': []})
+        self.paused = not self.paused
+        self.pause_button.setText('Resume' if self.paused else 'Pause')
+        self.game_view.setFocus()
 
     def tick(self):
         now = time.monotonic()
@@ -837,7 +847,7 @@ class DeveloperPanel(QMainWindow):
                 self.region_height.setMaximum(self.frame_size[1])
                 self.suggest_region()
             if self.camera.error is not None:
-                self.status.setText(f'Camera failed: {self.camera.error}')
+                self.hint.setText(f'Camera failed: {self.camera.error}')
             self.canvas.update()
 
     def shutdown(self):
