@@ -30,7 +30,7 @@ LOW_VISIBILITY = .5
 NOSE_TIP = 1  # MediaPipe face mesh vertex
 # Camera controls that can drive a body game: label, MediaPipe model, and the landmarks
 # drawn enlarged in the preview because they move the feet.
-CONTROLS = {'face': ('Face (nose)', 'face', (NOSE_TIP,)), 'palms': ('Both hands', 'hands', PALM)}
+CONTROLS = {'palms': ('Both hands', 'hands', PALM), 'face': ('Face (nose)', 'face', (NOSE_TIP,))}
 # Centre of the camera region that spans the whole game at sensitivity 1; its size is the
 # editable Camera region (camera pixels), suggested from the game resolution. A palm centre has
 # fingers above and the wrist below, so the hands' region sits a little low.
@@ -467,6 +467,9 @@ class DeveloperPanel(QMainWindow):
         self.show_feet.setToolTip('Draw the player\'s footprints in the game frame.')
         self.show_feet.toggled.connect(self.toggle_feet)
         form.addRow('Show feet indicator', self.show_feet)
+        self.developer = QCheckBox()
+        self.developer.setToolTip('Let the tracking source move the skeleton. Turns off whenever the input changes.')
+        form.addRow('Enable developer mode', self.developer)
         controls.addStretch()
         self.hint = HintCard()
         controls.addWidget(self.hint)
@@ -582,6 +585,7 @@ class DeveloperPanel(QMainWindow):
             self.camera.close()
             self.camera = None
         self.held.clear()
+        self.developer.setChecked(False)
         if index == CAMERA:
             try:
                 camera_index = self.camera_device.currentData()
@@ -613,6 +617,8 @@ class DeveloperPanel(QMainWindow):
 
     def move_body(self, x, y):
         """Move the whole body so the midpoint between its feet sits at a normalized game position."""
+        if not self.developer.isChecked():
+            return
         (lx, ly), (rx, ry) = self.provider.foot('left'), self.provider.foot('right')
         self.provider.move('body', x-(lx+rx)/2, y-(ly+ry)/2)
         self.canvas.update()
@@ -807,9 +813,9 @@ class DeveloperPanel(QMainWindow):
         elapsed, self.ticked = now-self.ticked, now
         if self.process is not None and self.process.poll() is not None:
             self.release_game(f'Game exited with status {self.process.returncode}')
-        if self.held and self.source.currentIndex() == KEYBOARD:
+        if self.held and self.source.currentIndex() == KEYBOARD and self.developer.isChecked():
             self.step_feet(elapsed)
-        if self.driving:
+        if self.driving and self.developer.isChecked():
             observation = self.camera.read()
             if observation is not self.driven:
                 self.drive(observation)
