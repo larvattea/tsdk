@@ -353,7 +353,7 @@ class DeveloperPanel(QMainWindow):
         self.ticked = time.monotonic()
         self.recorder = None
         self.recorded = None
-        root = QSplitter(Qt.Orientation.Horizontal)
+        self.root_splitter = root = QSplitter(Qt.Orientation.Horizontal)
         self.setCentralWidget(root)
         game = QWidget()
         game_column = QVBoxLayout(game)
@@ -370,7 +370,8 @@ class DeveloperPanel(QMainWindow):
         root.setStretchFactor(0, 2)
         root.setStretchFactor(1, 1)
         column = QVBoxLayout(side)
-        tools = QSplitter(Qt.Orientation.Vertical)
+        self.tools_splitter = tools = QSplitter(Qt.Orientation.Vertical)
+        self.sized = False
         column.addWidget(tools, 1)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -759,6 +760,19 @@ class DeveloperPanel(QMainWindow):
 
     def restart_game(self):
         self.start_game(self.replay)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self.sized:
+            self.sized = True
+            QTimer.singleShot(0, self.initial_sizes)
+
+    def initial_sizes(self):
+        """Game column two thirds of the width; controls 40% and preview 60% of the side column."""
+        width = self.root_splitter.width()
+        self.root_splitter.setSizes([width*2//3, width-width*2//3])
+        height = self.tools_splitter.height()
+        self.tools_splitter.setSizes([height*2//5, height-height*2//5])
 
     def stop_game(self):
         if self.process is None:
