@@ -493,7 +493,7 @@ class DeveloperPanel(QMainWindow):
         self.restart_button = QPushButton('Restart game')
         self.restart_button.clicked.connect(self.restart_game)
         buttons.addWidget(self.restart_button)
-        self.pause_button = QPushButton('Pause')
+        self.pause_button = QPushButton('Pause game')
         self.pause_button.clicked.connect(self.toggle_pause)
         buttons.addWidget(self.pause_button)
         self.stop_button = QPushButton('Stop game')
@@ -730,7 +730,7 @@ class DeveloperPanel(QMainWindow):
     def start_game(self):
         self.stop_game()
         self.paused = False
-        self.pause_button.setText('Pause')
+        self.pause_button.setText('Pause game')
         self.launches += 1
         frame_buffer = self.workdir/f'frame-{self.launches}.bin'
         stop_file = self.workdir/'game.stop'
@@ -812,14 +812,14 @@ class DeveloperPanel(QMainWindow):
         self.send({'type': kind, 'key': name, 'text': event.text(), 'mods': mods})
         if name == 'p' and kind == 'key_down':  # the runtime toggles its pause on P
             self.paused = not self.paused
-            self.pause_button.setText('Resume' if self.paused else 'Pause')
+            self.pause_button.setText('Resume game' if self.paused else 'Pause game')
 
     def toggle_pause(self):
         """Press P in the game: the runtime toggles its user pause."""
         for kind in ('key_down', 'key_up'):
             self.send({'type': kind, 'key': 'p', 'text': 'p', 'mods': []})
         self.paused = not self.paused
-        self.pause_button.setText('Resume' if self.paused else 'Pause')
+        self.pause_button.setText('Resume game' if self.paused else 'Pause game')
         self.game_view.setFocus()
 
     def tick(self):
