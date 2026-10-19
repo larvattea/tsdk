@@ -11,15 +11,17 @@ import tempfile
 import threading
 import time
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
-from PySide6.QtGui import QColor, QImage, QKeySequence, QPainter, QPen, QRegion, QShortcut
+from PySide6.QtCore import QPointF, QRectF, QStandardPaths, Qt, QTimer
+from PySide6.QtGui import QColor, QFontDatabase, QImage, QKeySequence, QPainter, QPen, QRegion, QShortcut
 from PySide6.QtMultimedia import QMediaDevices
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame,
-                               QHBoxLayout, QLabel, QMainWindow, QMenu, QMessageBox, QPushButton, QScrollArea,
-                               QSizePolicy, QSpinBox, QSplitter, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
+                               QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu,
+                               QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSizePolicy, QSpinBox,
+                               QSplitter, QVBoxLayout, QWidget)
 
 from ttea.sdk.cartridge import extract_cartridge
 from ttea.sdk.embedding import FrameReader
+from ttea.sdk.file_records import FileRecords
 from ttea.sdk.runtime import DEFAULT_RESOLUTION, load_manifest
 from ttea.sdk.simulator import write_state
 from ttea.sdk.tracking import Landmark, Observation
@@ -56,6 +58,12 @@ KEYS = {Qt.Key.Key_Escape: 'escape', Qt.Key.Key_Return: 'return', Qt.Key.Key_Ent
         Qt.Key.Key_Right: 'right', Qt.Key.Key_Up: 'up', Qt.Key.Key_Down: 'down', Qt.Key.Key_Shift: 'left shift',
         Qt.Key.Key_Control: 'left ctrl', Qt.Key.Key_Alt: 'left alt', Qt.Key.Key_Meta: 'left meta',
         **{getattr(Qt.Key, f'Key_F{n}'): f'f{n}' for n in range(1, 13)}}
+
+
+def players_dir():
+    """Saved registered-player records, one JSON file per game id; they outlive the panel's temporary workdir."""
+    data = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.GenericDataLocation)
+    return Path(data)/'tsdk'/'players'
 
 
 def camera_devices():
@@ -423,6 +431,64 @@ class LandmarkCanvas(QWidget):
         super().focusOutEvent(event)
 
 
+class PlayerConfigDialog(QDialog):
+    """Edit the saved player configuration as a JSON object. Accepted: values is the new configuration,
+    or None when Reset deleted the saved file."""
+
+    def __init__(self, parent, game_id, path):
+        super().__init__(parent)
+        self.setWindowTitle(f'Player configuration — {game_id}')
+        self.game_id = game_id
+        self.values = None
+        layout = QVBoxLayout(self)
+        try:
+            exists = path.exists()
+            configuration = FileRecords(path).load()['configuration']
+            note = (f'Saved in {path}.' if exists else
+                    f'No saved configuration yet ({path}). The game fills in its defaults the first time '
+                    'it starts as a registered player; add values here to override them.')
+        except (OSError, ValueError) as exc:
+            configuration, note = None, f'Cannot read {path}: {exc}. Reset deletes it.'
+        info = QLabel(note + ' Saving restarts the game.')
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        self.editor = QPlainTextEdit(json.dumps(configuration or {}, indent=2, ensure_ascii=False))
+        self.editor.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
+        layout.addWidget(self.editor, 1)
+        self.error = QLabel()
+        self.error.setStyleSheet('color: #f87171;')
+        self.error.setWordWrap(True)
+        layout.addWidget(self.error)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Reset
+                                   | QDialogButtonBox.StandardButton.Cancel)
+        self.save_button = buttons.button(QDialogButtonBox.StandardButton.Save)
+        self.save_button.setEnabled(configuration is not None)
+        self.save_button.clicked.connect(self.save)
+        buttons.button(QDialogButtonBox.StandardButton.Reset).clicked.connect(self.reset)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.resize(520, 560)
+
+    def save(self):
+        try:
+            values = json.loads(self.editor.toPlainText())
+        except json.JSONDecodeError as exc:
+            self.error.setText(f'Invalid JSON: {exc}')
+            return
+        if not isinstance(values, dict):
+            self.error.setText('The configuration must be a JSON object: {"key": value, …}')
+            return
+        self.values = values
+        self.accept()
+
+    def reset(self):
+        answer = QMessageBox.question(self, 'Reset player', f'Delete the saved configuration and sessions of '
+                                      f'{self.game_id}? The game recreates its defaults on the next start.')
+        if answer == QMessageBox.StandardButton.Yes:
+            self.values = None
+            self.accept()
+
+
 class DeveloperPanel(QMainWindow):
     def __init__(self, workdir, project):
         super().__init__()
@@ -538,6 +604,17 @@ class DeveloperPanel(QMainWindow):
         self.developer.setChecked(True)
         self.developer.setToolTip('Let the tracking source move the skeleton.')
         form.addRow('Enable developer mode', self.developer)
+        self.players = players_dir()
+        self.registered = QCheckBox()
+        self.registered.setToolTip('Run the game for a registered player whose configuration and sessions are '
+                                   'saved per game and kept between runs. Off: an anonymous session without records.')
+        self.registered.toggled.connect(self.toggle_registered)
+        form.addRow('Registered player', self.registered)
+        self.player_config_button = QPushButton('Edit config…')
+        self.player_config_button.setToolTip('Edit, or reset, the registered player\'s saved configuration '
+                                             'of the loaded game.')
+        self.player_config_button.clicked.connect(self.edit_player_config)
+        form.addRow('Player config', self.player_config_button)
         controls.addStretch()
         self.hint = HintCard()
         controls.addWidget(self.hint)
@@ -743,6 +820,7 @@ class DeveloperPanel(QMainWindow):
         self.pause_button.setVisible(running)
         self.stop_button.setVisible(running)
         self.exit_button.setVisible(not running)
+        self.player_config_button.setEnabled(self.manifest is not None and self.registered.isChecked())
         self.canvas.update()
 
     def set_present(self, value):
@@ -813,6 +891,8 @@ class DeveloperPanel(QMainWindow):
         config = {'session_root': str(self.workdir/'sessions'), 'synthetic': True, 'stop_file': str(stop_file),
                   'frame_buffer': str(frame_buffer), 'input': 'stdin', 'width': width, 'height': height,
                   'show_feet': self.show_feet.isChecked()}
+        if self.registered.isChecked():
+            config['records'] = str(self.records_path())
         command = [sys.executable, '-m', 'ttea.sdk.runtime', str(self.project)]
         write_state(self.state_path, self.tracker())
         config['simulation_state'] = str(self.state_path)
@@ -827,6 +907,35 @@ class DeveloperPanel(QMainWindow):
     def restart_game(self):
         if self.manifest is not None:
             self.start_game()
+
+    def records_path(self):
+        return self.players/f"{self.manifest['id']}.json"
+
+    def toggle_registered(self, checked):
+        """Records bind when the runtime starts, so a running game restarts as the chosen player."""
+        if self.process is not None:
+            self.start_game()
+        self.show_state()
+
+    def edit_player_config(self):
+        dialog = PlayerConfigDialog(self, self.manifest['id'], self.records_path())
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.apply_player_config(dialog.values)
+
+    def apply_player_config(self, values):
+        """Save the configuration, or delete the player's file when values is None, then restart the game.
+        The game stops first so its own final save cannot overwrite the edit."""
+        self.stop_game()
+        path = self.records_path()
+        try:
+            if values is None:
+                path.unlink(missing_ok=True)
+            else:
+                FileRecords(path).replace_configuration(values)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, 'Cannot save player configuration', str(exc))
+            return
+        self.start_game()
 
     def toggle_feet(self, checked):
         """Live: the runtime applies config messages without restarting the game."""
