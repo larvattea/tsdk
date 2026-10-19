@@ -621,7 +621,7 @@ wheels = [
 [[package]]
 name = "t-tea"
 version = "2.0.0"
-source = { git = "https://github.com/laurogripa/ttea?branch=main#9de6dc95c77676f155c019d79756afab897ad5e9" }
+source = { git = "https://github.com/laurogripa/ttea?branch=main#832af1c7e37499d52555636164c7cb842f0fa9ca" }
 dependencies = [
     { name = "mediapipe" },
     { name = "numpy" },
