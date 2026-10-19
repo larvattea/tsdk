@@ -88,7 +88,7 @@ Check **Registered player** to run it with `context.records`, backed by one JSON
 `<data dir>/tsdk/players/<game id>.json`, where the data dir is Qt's generic data location (`~/Library/Application Support` on macOS, `~/.local/share` on Linux, `%LOCALAPPDATA%` on Windows).
 The game's first registered start saves its defaults there.
 
-With a game loaded and **Registered player** checked, **Edit config…** opens that configuration as a JSON object. For example, set KarTEA's `"palette": 4` and `"horizon_image": "horizon_night"`.
+With a game loaded and **Registered player** checked, **Edit config…** opens that configuration as a JSON object. For example, set KarTEA's `"palette": 4` and `"horizon_image": "horizonnight"`.
 Save stops the game, writes the file, and restarts it; keys you delete fall back to the game's defaults.
 **Reset** deletes the file, sessions included.
 
