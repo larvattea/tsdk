@@ -77,9 +77,20 @@ Load game starts browsing from `project` (default: the current directory) and ac
 | Camera | Body pose, both index fingers pointing down, both whole hands, or the nose as the centre of the feet |
 
 Synthetic and mouse sources need no camera, player registration, or calibration. The webcam opens only when you select Camera.
-Sessions use temporary storage.
+Session results use temporary storage.
 
 > **Note:** The runtime renders off-screen, so `pygame.mouse.get_pos` and `pygame.key.get_pressed` stay idle. Read input from `context.events`.
+
+### Registered player tests per-player settings
+
+Off by default, the game runs as an anonymous player and `context.records` is `None`.
+Check **Registered player** to run it with `context.records`, backed by one JSON file per game id that survives restarts:
+`<data dir>/tsdk/players/<game id>.json`, where the data dir is Qt's generic data location (`~/Library/Application Support` on macOS, `~/.local/share` on Linux, `%LOCALAPPDATA%` on Windows).
+The game's first registered start saves its defaults there.
+
+With a game loaded and **Registered player** checked, **Edit config…** opens that configuration as a JSON object. For example, set KarTEA's `"palette": 4` and `"horizon_image": "horizon_night"`.
+Save stops the game, writes the file, and restarts it; keys you delete fall back to the game's defaults.
+**Reset** deletes the file, sessions included.
 
 ## Release builds need a clean Git checkout
 
