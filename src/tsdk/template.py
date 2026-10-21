@@ -1,11 +1,11 @@
 import json
 from pathlib import Path
 
-from ttea.sdk.cartridge import validate_manifest
+from .cartridge import validate_manifest
 
 GAME = '''"""Draw tracked points using the platform-owned loop and observation pipeline."""
 import pygame
-from ttea.sdk.api import GameContext
+from tsdk.api import GameContext
 
 
 class Game:
@@ -40,7 +40,7 @@ def new_project(destination, game_id, name, profile):
     if destination.exists():
         raise ValueError(f"Destination already exists: {destination}")
     manifest = {"id": game_id, "version": "0.1.0", "entrypoint": "game:Game", "tracking_profile": profile,
-                "game_api": 1, "requires_ttea": ">=2.0,<3", "name": {"en": name}, "assets": [], "licenses": ["LICENSE"]}
+                "game_api": 1, "requires_tsdk": ">=0.2,<0.3", "name": {"en": name}, "assets": [], "licenses": ["LICENSE"]}
     validate_manifest(manifest)
     destination.mkdir(parents=True)
     files = {
@@ -50,7 +50,7 @@ version = "0.1.0"
 entrypoint = "game:Game"
 tracking_profile = "{profile}"
 game_api = 1
-requires_ttea = ">=2.0,<3"
+requires_tsdk = ">=0.2,<0.3"
 assets = []
 licenses = ["LICENSE"]
 
@@ -61,13 +61,9 @@ en = {json.dumps(name)}
 name = {json.dumps(game_id)}
 version = "0.1.0"
 requires-python = ">=3.14"
-dependencies = ["t-tea>=2.0,<3"]
-
-[dependency-groups]
-dev = ["tsdk>=0.1,<0.2"]
+dependencies = ["tsdk>=0.2,<0.3"]
 
 [tool.uv.sources]
-t-tea = {{ git = "https://github.com/laurogripa/ttea", branch = "main" }}
 tsdk = {{ git = "https://github.com/laurogripa/tsdk", branch = "main" }}
 ''',
         "game.py": GAME,

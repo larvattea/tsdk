@@ -2,9 +2,6 @@ name: TSDK game contract
 on:
   workflow_call:
     inputs:
-      ttea-ref:
-        type: string
-        required: true
       builder-ref:
         type: string
         required: true
@@ -19,9 +16,6 @@ on:
         type: boolean
         default: false
     secrets:
-      TTEA_DEPLOY_KEY:
-        description: Read-only SSH key for a private TTEA repository
-        required: false
       TSDK_DEPLOY_KEY:
         description: Read-only SSH key for a private tsdk repository
         required: false
@@ -46,12 +40,6 @@ jobs:
           fetch-depth: 0
       - uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/ttea
-          ref: ${{ inputs.ttea-ref }}
-          path: ttea
-          ssh-key: ${{ secrets.TTEA_DEPLOY_KEY }}
-      - uses: actions/checkout@v4
-        with:
           repository: ${{ github.repository_owner }}/tsdk
           ref: ${{ inputs.builder-ref }}
           path: tsdk
@@ -67,7 +55,7 @@ jobs:
       - name: Install tooling and authoritative platform
         run: |
           uv venv
-          uv pip install --no-sources ./ttea ./tsdk "ruff>=0.11,<0.12" "mypy>=1.15,<1.16"
+          uv pip install --no-sources ./tsdk "ruff>=0.11,<0.12" "mypy>=1.15,<1.16"
       - name: Validate game and public boundaries
         shell: bash
         env:

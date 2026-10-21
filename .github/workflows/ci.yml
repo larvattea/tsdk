@@ -21,11 +21,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: tsdk
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository_owner }}/ttea
-          path: ttea
-          ssh-key: ${{ secrets.TTEA_DEPLOY_KEY }}
       - name: Install Linux Qt runtime dependencies
         if: runner.os == 'Linux'
         run: |
@@ -42,6 +37,6 @@ jobs:
         working-directory: tsdk
         run: |
           uv venv
-          uv pip install --no-sources ../ttea -e .
+          uv pip install --no-sources -e .
           uv run --no-project python -m unittest discover -s tests
           uvx --from ruff==0.11.13 ruff check --select E9,F src tests

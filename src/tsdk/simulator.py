@@ -1,10 +1,14 @@
-"""Developer-mode body simulation: skeleton edges, foot placement, and hand gestures."""
+"""Synthetic tracking, atomic local developer-process transport, and developer-mode body simulation."""
 from __future__ import annotations
 
+from dataclasses import replace
+import json
 import math
+from pathlib import Path
+import time
 
-from ttea.sdk.simulator import SimulatorProvider
-from ttea.sdk.tracking import Landmark
+from .tracking import Landmark, Observation, observation_from_dict, observation_to_dict
+from ._face_fixture import FACE_VERTICES
 
 BODY_EDGES = [(11,12),(11,13),(13,15),(12,14),(14,16),(11,23),(12,24),(23,24),(23,25),(25,27),(24,26),(26,28),(27,29),(29,31),(28,30),(30,32)]
 HAND_EDGES = [(0, 1 + finger * 4) for finger in range(5)] + [(i, i+1) for start in (1,5,9,13,17) for i in range(start,start+3)]
@@ -18,8 +22,83 @@ COINCIDENT = 1e-9  # closer feet have no meaningful direction; place them side b
 PALM = (0, 5, 9, 13, 17)
 
 
+def _body():
+    xy = [(0.5,.15),(.48,.13),(.46,.13),(.44,.13),(.52,.13),(.54,.13),(.56,.13),(.41,.16),(.59,.16),(.47,.19),(.53,.19),(.38,.3),(.62,.3),(.29,.45),(.71,.45),(.22,.6),(.78,.6),(.2,.62),(.8,.62),(.21,.64),(.79,.64),(.24,.61),(.76,.61),(.43,.55),(.57,.55),(.42,.73),(.58,.73),(.41,.89),(.59,.89),(.4,.92),(.6,.92),(.36,.94),(.64,.94)]
+    return [Landmark(x,y,0.,1.) for x,y in xy]
+
+
+def _hand(side):
+    center = .32 if side == 'left' else .68
+    sign = 1 if side == 'left' else -1
+    points = [Landmark(center,.72,0.)]
+    for finger in range(5):
+        for joint in range(4):
+            points.append(Landmark(center + sign * ((finger-2)*.045), .62 - joint * (.055 if finger != 0 else .035), 0.))
+    return points
+
+
+def _face():
+    points = [Landmark(.5+x/40, .48-y/40, -z/40) for x,y,z in FACE_VERTICES]
+    # Authored iris centers/rings extend the canonical 468 vertices in Tasks order.
+    for outer, inner, upper, lower in ((33,133,159,145),(362,263,386,374)):
+        cx = (points[outer].x+points[inner].x)/2
+        cy = (points[upper].y+points[lower].y)/2
+        cz = (points[outer].z+points[inner].z)/2
+        radius = abs(points[outer].x-points[inner].x)*.18
+        points.extend(Landmark(cx+dx,cy+dy,cz) for dx,dy in
+                      ((0,0),(radius,0),(0,-radius),(-radius,0),(0,radius)))
+    return points
+
+
+class SimulatorProvider:
+    """Editable authored observations; stale mode freezes time, not landmarks.
+
+    Synthetic world coordinates use fixed meter scales (body 2, hands .5 per
+    image unit), centered on the hip midpoint or hand centroid. Translation
+    preserves them. They are not estimated measurements.
+    Face world coordinates are unsupported. Canonical face coordinates and
+    authored iris geometry are development fixtures, not physiology.
+    """
+    def __init__(self, profile):
+        if profile not in ('body','hands','face'):
+            raise ValueError(f'Unknown tracking profile: {profile}')
+        self.profile = profile
+        self.stale = False
+        groups = {'body': _body()} if profile == 'body' else ({side:_hand(side) for side in ('left','right')} if profile == 'hands' else {'face':_face()})
+        self.observation = Observation(
+            profile=profile, timestamp=time.monotonic(), landmarks=groups,
+            handedness={side: {'label':side, 'score':None} for side in groups} if profile == 'hands' else {},
+            confidence_source='authored')
+        self._sync_world()
+
+    def _sync_world(self):
+        world = {}
+        for key, points in self.observation.landmarks.items():
+            if key == 'face':
+                continue
+            origin = [points[23],points[24]] if key == 'body' else points
+            center = [sum(getattr(p,axis) or 0. for p in origin)/len(origin) for axis in ('x','y','z')]
+            # Fixed authored scales in meters, independent of image translation.
+            scale = 2. if key == 'body' else .5
+            world[key] = [Landmark((p.x-center[0])*scale,(p.y-center[1])*scale,
+                                   ((p.z or 0.)-center[2])*scale,p.visibility) for p in points]
+        self.observation = replace(self.observation, world_landmarks=world)
+
+    def read(self):
+        if not self.stale:
+            self.observation = replace(self.observation, timestamp=time.monotonic())
+        return observation_from_dict(observation_to_dict(self.observation))
+
+    def move(self, group, dx=0., dy=0., dz=0.):
+        self.observation.landmarks[group] = [Landmark(p.x+dx,p.y+dy,(p.z or 0.)+dz,p.visibility) for p in self.observation.landmarks[group]]
+        self._sync_world()
+
+    def close(self):
+        pass
+
+
 class DeveloperSimulator(SimulatorProvider):
-    """TTEA's synthetic provider plus the foot placement developer mode drives with mouse, keys, or camera."""
+    """The synthetic provider plus the foot placement developer mode drives with mouse, keys, or camera."""
 
     def foot(self, side):
         """Body foot point as the tracking pipeline derives it: the heel/toe midpoint."""
@@ -72,3 +151,31 @@ def palm_centre(hand):
     if not hand or len(hand) < 21:
         return None
     return Landmark(sum(hand[i].x for i in PALM)/len(PALM), sum(hand[i].y for i in PALM)/len(PALM))
+
+
+def write_state(path, provider):
+    path = Path(path)
+    temporary = path.with_suffix('.tmp')
+    observation = provider.read()
+    temporary.write_text(json.dumps({'observation':observation_to_dict(observation), 'stale':provider.stale}, allow_nan=False), encoding='utf-8')
+    temporary.replace(path)
+    return observation
+
+
+class FileSimulatorProvider:
+    """Consume atomic panel snapshots without a camera or network listener."""
+    def __init__(self, profile, path):
+        self.profile = profile
+        self.path = Path(path)
+        self.observation = None
+
+    def read(self):
+        state = json.loads(self.path.read_text(encoding='utf-8'))
+        observation = observation_from_dict(state['observation'])
+        if observation.profile != self.profile:
+            raise ValueError('Simulator profile does not match game profile')
+        self.observation = observation
+        return observation
+
+    def close(self):
+        pass

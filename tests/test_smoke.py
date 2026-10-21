@@ -9,9 +9,9 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from ttea.sdk.cartridge import extract_cartridge
-from ttea.sdk.runtime import run_game
-from ttea.sdk.tracking import Landmark, Observation, Recording
+from tsdk.cartridge import extract_cartridge
+from tsdk.runtime import run_game
+from tsdk.tracking import Landmark, Observation, Recording
 
 
 def main():

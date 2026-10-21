@@ -1,9 +1,8 @@
 import math
 import unittest
 
-from ttea.sdk.tracking import TrackingPipeline
-
 from tsdk.simulator import MAX_STRIDE, MIN_STANCE, DeveloperSimulator
+from tsdk.tracking import TrackingPipeline
 
 
 class DeveloperSimulatorTest(unittest.TestCase):

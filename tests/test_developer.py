@@ -16,7 +16,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from tsdk.developer import DeveloperPanel, PlayerConfigDialog
 from tsdk.template import new_project
 
-GAME = '''from ttea.sdk.api import Game as BaseGame
+GAME = '''from tsdk.api import Game as BaseGame
 
 
 class Game(BaseGame):

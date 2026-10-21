@@ -7,7 +7,7 @@ from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 import tomllib
 
-from ttea.sdk.cartridge import read_project
+from .cartridge import read_project
 
 FORBIDDEN_ROOTS = {"cv2", "mediapipe", "pip", "ensurepip", "subprocess", "ctypes", "cffi", "importlib"}
 FORBIDDEN_CALLS = {
@@ -15,9 +15,9 @@ FORBIDDEN_CALLS = {
     "pygame.camera", "pygame.mixer.init", "pygame.mixer.quit",
     "pygame.time.Clock", "os.system", "os.popen", "os.spawn", "os.exec",
     "__import__", "eval", "exec", "compile", "getattr",
-    "ttea.sdk.runtime", "ttea.sdk.providers", "ttea.sdk.simulator",
+    "tsdk.runtime", "tsdk.providers", "tsdk.simulator",
 }
-PUBLIC_PLATFORM_MODULES = {"ttea.sdk.api", "ttea.sdk.tracking"}
+PUBLIC_PLATFORM_MODULES = {"tsdk.api", "tsdk.tracking"}
 FORBIDDEN_SUFFIXES = {".pyc", ".pyo", ".so", ".dylib", ".dll", ".exe", ".pyd", ".whl", ".tflite", ".task", ".onnx", ".pb", ".pt", ".pth"}
 FORBIDDEN_NAMES = {"setup.py", "setup.cfg", "pyproject.toml", "requirements.txt", "sitecustomize.py", "usercustomize.py", "manifest.json", "ttea.toml"}
 
@@ -47,7 +47,7 @@ def project_files(root, manifest):
                 continue
             if path.suffix.lower() in FORBIDDEN_SUFFIXES or path.name.lower() in FORBIDDEN_NAMES:
                 raise ValueError(f"Forbidden cartridge content: {relative}")
-            if relative.parts[0] in {"ttea", "pygame", "numpy", "cv2", "mediapipe", "PySide6"}:
+            if relative.parts[0] in {"tsdk", "pygame", "numpy", "cv2", "mediapipe", "PySide6"}:
                 raise ValueError(f"Bundled platform library: {relative}")
             files.add(path)
     return sorted(files)
@@ -80,12 +80,12 @@ def check_source(path, local_modules):
                 name = f"{node.module}.{alias.name}"
                 aliases[alias.asname or alias.name] = name
                 imports.append((node, name))
-    allowed = set(sys.stdlib_module_names) | {"pygame", "numpy", "ttea"} | local_modules
+    allowed = set(sys.stdlib_module_names) | {"pygame", "numpy", "tsdk"} | local_modules
     for node, name in imports:
         top = name.split(".")[0]
         if top in FORBIDDEN_ROOTS or top not in allowed:
             raise ValueError(f"{path}:{node.lineno}: unsupported runtime import {name}")
-        if top == "ttea" and not any(name == public or name.startswith(public + ".") for public in PUBLIC_PLATFORM_MODULES):
+        if top == "tsdk" and not any(name == public or name.startswith(public + ".") for public in PUBLIC_PLATFORM_MODULES):
             raise ValueError(f"{path}:{node.lineno}: platform-owned import {name}")
     # Resolve direct aliases as well as imported aliases, including assignments
     # declared after their use inside a callback.
@@ -111,22 +111,22 @@ def check(root):
     manifest = read_project(root)
     config_path = root / "pyproject.toml"
     if not config_path.is_file():
-        raise ValueError("Game project requires pyproject.toml with a bounded t-tea runtime dependency")
+        raise ValueError("Game project requires pyproject.toml with a bounded tsdk runtime dependency")
     config = tomllib.loads(config_path.read_text(encoding="utf-8"))
     project = config.get("project", {})
     dependencies = project.get("dependencies", [])
     if project.get("dynamic"):
         raise ValueError("Dynamic project metadata is not supported")
     if len(dependencies) != 1:
-        raise ValueError("Game runtime dependencies must contain only t-tea; put tsdk in a development group")
+        raise ValueError("Game runtime dependencies must contain only tsdk")
     dependency = Requirement(dependencies[0])
-    if canonicalize_name(dependency.name) != "t-tea" or dependency.url or dependency.extras or dependency.marker:
-        raise ValueError("Only an unconditional t-tea version range is allowed")
+    if canonicalize_name(dependency.name) != "tsdk" or dependency.url or dependency.extras or dependency.marker:
+        raise ValueError("Only an unconditional tsdk version range is allowed")
     operators = {item.operator for item in dependency.specifier}
     if not operators.intersection({">=", ">", "==", "~="}) or not operators.intersection({"<", "<=", "==", "~="}):
-        raise ValueError("t-tea dependency must have lower and upper version bounds")
-    if str(dependency.specifier) != str(Requirement("t-tea" + manifest["requires_ttea"]).specifier):
-        raise ValueError("pyproject.toml and ttea.toml must declare the same TTEA compatibility range")
+        raise ValueError("tsdk dependency must have lower and upper version bounds")
+    if str(dependency.specifier) != str(Requirement("tsdk" + manifest["requires_tsdk"]).specifier):
+        raise ValueError("pyproject.toml and ttea.toml must declare the same TSDK compatibility range")
     if project.get("optional-dependencies"):
         raise ValueError("Game-specific optional runtime dependencies are not supported")
     files = project_files(root, manifest)
@@ -143,13 +143,13 @@ def check(root):
     methods = {node.name: node for node in classes[0].body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
     entry_aliases = {}
     for node in tree.body:
-        if isinstance(node, ast.ImportFrom) and node.module == "ttea.sdk.api":
+        if isinstance(node, ast.ImportFrom) and node.module == "tsdk.api":
             for alias in node.names:
-                entry_aliases[alias.asname or alias.name] = f"ttea.sdk.api.{alias.name}"
+                entry_aliases[alias.asname or alias.name] = f"tsdk.api.{alias.name}"
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 entry_aliases[alias.asname or alias.name.split(".")[0]] = alias.name if alias.asname else alias.name.split(".")[0]
-    inherits_game = any(resolve_name(base, entry_aliases) == "ttea.sdk.api.Game" for base in classes[0].bases)
+    inherits_game = any(resolve_name(base, entry_aliases) == "tsdk.api.Game" for base in classes[0].bases)
     for name in ("start", "update", "draw", "pause", "resume", "stop"):
         method = methods.get(name)
         if method is None and inherits_game:

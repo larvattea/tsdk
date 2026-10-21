@@ -19,14 +19,12 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDia
                                QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSizePolicy, QSpinBox,
                                QSplitter, QVBoxLayout, QWidget)
 
-from ttea.sdk.cartridge import extract_cartridge
-from ttea.sdk.embedding import FrameReader
-from ttea.sdk.file_records import FileRecords
-from ttea.sdk.runtime import DEFAULT_RESOLUTION, load_manifest
-from ttea.sdk.simulator import write_state
-from ttea.sdk.tracking import Landmark, Observation
-
-from .simulator import BODY_EDGES, HAND_EDGES, PALM, DeveloperSimulator, palm_centre
+from .cartridge import extract_cartridge
+from .embedding import FrameReader
+from .file_records import FileRecords
+from .runtime import DEFAULT_RESOLUTION, load_manifest
+from .simulator import BODY_EDGES, HAND_EDGES, PALM, DeveloperSimulator, palm_centre, write_state
+from .tracking import Landmark, Observation
 
 LOW_VISIBILITY = .5
 NOSE_TIP = 1  # MediaPipe face mesh vertex
@@ -162,7 +160,7 @@ class CameraSource:
         self._thread.start()
 
     def _run(self, camera_index):
-        from ttea.sdk.providers import HardwareProvider
+        from .providers import HardwareProvider
         try:
             self._provider = HardwareProvider(self.profile, camera_index=camera_index)
             while self._running:
@@ -238,8 +236,8 @@ class GameView(QWidget):
     def paint_feet(self, painter, target):
         """Without a game, draw the feet the game would receive, exactly as the runtime does."""
         import pygame
-        from ttea.sdk.feet import draw_feet
-        from ttea.sdk.tracking import TrackingPipeline
+        from .feet import draw_feet
+        from .tracking import TrackingPipeline
         tracking = TrackingPipeline('body').process(self.panel.tracker().read())
         if tracking.missing:
             return
@@ -890,7 +888,7 @@ class DeveloperPanel(QMainWindow):
                   'show_feet': self.show_feet.isChecked()}
         if self.registered.isChecked():
             config['records'] = str(self.records_path())
-        command = [sys.executable, '-m', 'ttea.sdk.runtime', str(self.project)]
+        command = [sys.executable, '-m', 'tsdk.runtime', str(self.project)]
         write_state(self.state_path, self.tracker())
         config['simulation_state'] = str(self.state_path)
         command.append('--simulation')

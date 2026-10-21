@@ -4,10 +4,10 @@ import subprocess
 import tempfile
 import unittest
 
+from tsdk.cartridge import inspect_cartridge
 from tsdk.checks import check
 from tsdk.cli import build
 from tsdk.template import new_project
-from ttea.sdk.cartridge import inspect_cartridge
 
 
 class ReleaseTest(unittest.TestCase):
@@ -63,7 +63,7 @@ class ReleaseTest(unittest.TestCase):
             '    @staticmethod\n    def update(self, context): pass\n',
         ]
         for callback in callbacks:
-            (self.root / 'game.py').write_text('from ttea.sdk.api import Game as Base\nclass Game(Base):\n' + callback)
+            (self.root / 'game.py').write_text('from tsdk.api import Game as Base\nclass Game(Base):\n' + callback)
             with self.subTest(callback=callback), self.assertRaisesRegex(ValueError, 'update'):
                 check(self.root)
 

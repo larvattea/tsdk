@@ -7,7 +7,7 @@ import sys
 import tempfile
 import zipfile
 
-from ttea.sdk.cartridge import inspect_cartridge, validate_manifest
+from .cartridge import inspect_cartridge, validate_manifest
 
 from .checks import check
 from .template import new_project
@@ -73,6 +73,12 @@ def main(argv=None):
     new.add_argument("--id", default="example-game")
     new.add_argument("--name", default="Example Game")
     new.add_argument("--profile", choices=("body", "hands", "face"), default="body")
+    launch = commands.add_parser("play", help="Run a cartridge for the TTEA console with its camera and calibration")
+    launch.add_argument("cartridge", type=Path)
+    launch.add_argument("--lang", required=True)
+    launch.add_argument("--player_id", required=True)
+    launch.add_argument("--professional_id", required=True)
+    launch.add_argument("--data-dir", type=Path, required=True, help="TTEA user data directory")
     args = parser.parse_args(argv)
     try:
         if args.command == "check":
@@ -84,6 +90,10 @@ def main(argv=None):
             from .developer import run
 
             return run(args.project)
+        elif args.command == "play":
+            from .console import play
+
+            play(args.cartridge, args.lang, args.player_id, args.professional_id, args.data_dir)
         else:
             print(new_project(args.destination, args.id, args.name, args.profile))
     except (ValueError, OSError, SyntaxError) as error:
