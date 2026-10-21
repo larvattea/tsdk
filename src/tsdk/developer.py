@@ -148,7 +148,6 @@ class CameraSource:
 
     Frames are only previewed in the panel, never stored.
     """
-    stale = False
 
     def __init__(self, profile, camera_index):
         self.profile = profile
@@ -461,9 +460,9 @@ class PlayerConfigDialog(QDialog):
         layout.addWidget(self.error)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Reset
                                    | QDialogButtonBox.StandardButton.Cancel)
-        self.save_button = buttons.button(QDialogButtonBox.StandardButton.Save)
-        self.save_button.setEnabled(configuration is not None)
-        self.save_button.clicked.connect(self.save)
+        save_button = buttons.button(QDialogButtonBox.StandardButton.Save)
+        save_button.setEnabled(configuration is not None)
+        save_button.clicked.connect(self.save)
         buttons.button(QDialogButtonBox.StandardButton.Reset).clicked.connect(self.reset)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -702,18 +701,16 @@ class DeveloperPanel(QMainWindow):
         self.change_camera()
 
     def show_camera_tuning(self):
-        """Camera rows appear only for the camera source; tuning only for controls that drive the body."""
+        """Camera rows, including region and sensitivity tuning, appear only for the camera source."""
         camera = self.source.currentIndex() == CAMERA
         control = self.control.currentData()
-        tuned = camera and control in self.sensitivity
         self.form.setRowVisible(self.camera_device, camera)
         self.form.setRowVisible(self.control, camera)
-        self.form.setRowVisible(self.sensitivity_box, tuned)
-        self.form.setRowVisible(self.region, tuned)
-        if control in self.sensitivity:
-            self.sensitivity_box.blockSignals(True)
-            self.sensitivity_box.setValue(self.sensitivity[control])
-            self.sensitivity_box.blockSignals(False)
+        self.form.setRowVisible(self.sensitivity_box, camera)
+        self.form.setRowVisible(self.region, camera)
+        self.sensitivity_box.blockSignals(True)
+        self.sensitivity_box.setValue(self.sensitivity[control])
+        self.sensitivity_box.blockSignals(False)
 
     def camera_region(self):
         """Dashed region as (left, top, right, bottom) frame fractions around the control's centre, kept in frame."""
@@ -828,7 +825,7 @@ class DeveloperPanel(QMainWindow):
         self.canvas.update()
 
     def load_folder(self):
-        directory = QFileDialog.getExistingDirectory(self, 'Load game project', str(self.project or Path.cwd()))
+        directory = QFileDialog.getExistingDirectory(self, 'Load game project', str(self.project))
         if directory:
             self.load_project(Path(directory))
 
