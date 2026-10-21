@@ -1,12 +1,11 @@
 # TSDK: SDK for Serious Exergames
 
-Build games for [TTEA](https://github.com/laurogripa/ttea), the interactive-floor exergame console.
-
-TSDK creates, checks, packages, and test-runs games. Every game runs on TTEA's own runtime, tracking, and camera code.
+TSDK creates, checks, packages, and test-runs games for [TTEA](https://github.com/laurogripa/ttea), the interactive-floor exergame console.
+Games run on TTEA's own runtime, tracking, and camera code.
 
 ## Start a game in six commands
 
-Keep `ttea`, `tsdk`, and your games in the same parent directory, then run:
+Keep `ttea`, `tsdk`, and your games in one parent directory, then run:
 
 ```sh
 cd tsdk
@@ -19,22 +18,22 @@ uv run tsdk dev
 
 | Command | Result |
 | --- | --- |
-| `tsdk new DEST [--id] [--name] [--profile body\|hands\|face]` | New project with `ttea.toml`, `pyproject.toml`, `game.py`, and `LICENSE` |
-| `tsdk check [project]` | Validates the manifest and source without running the game |
+| `tsdk new DEST [--id ID] [--name NAME] [--profile body\|hands\|face]` | Project with `ttea.toml`, `pyproject.toml`, `game.py`, `.gitignore`, and `LICENSE` |
+| `tsdk check [project]` | Validates manifest and source without running the game |
 | `tsdk dev [project]` | Opens developer mode |
-| `tsdk build [project] [--output PATH] [--release]` | Writes `dist/<id>-<version>.ttea` |
+| `tsdk build [project] [--output OUTPUT] [--release]` | Writes `dist/<id>-<version>.ttea` |
 
-Commit each game's `uv.lock`. The `../` paths in `[tool.uv.sources]` serve local development only; change them for another layout.
+Commit each game's `uv.lock`. The `../` paths in `[tool.uv.sources]` assume this layout; change them for another one.
 
 ## A `.ttea` file is a game TTEA can install
 
-A `.ttea` file is a ZIP archive. TTEA installs it, validates its manifest, and runs the game. It holds:
+A `.ttea` file is a ZIP archive that TTEA validates, installs, and runs. It holds:
 
 - the entrypoint module, root Python modules, and top-level packages
 - the assets and license notices listed in `ttea.toml`
 - `manifest.json`, generated from `ttea.toml` at build time
 
-You author `ttea.toml`. This one is from Ginga Divina:
+You write `ttea.toml`. This one is from Ginga Divina:
 
 ```toml
 [game]
@@ -53,7 +52,7 @@ pt = "Ginga Divina"
 en = "Ginga Divina"
 ```
 
-The build adds provenance to `manifest.json`; games cannot set it themselves:
+The build adds these provenance fields to `manifest.json`; games cannot set them:
 
 | Field | Value |
 | --- | --- |
@@ -65,36 +64,38 @@ The build adds provenance to `manifest.json`; games cannot set it themselves:
 ## Developer mode runs your game beside tracking tools
 
 `uv run tsdk dev [project]` opens a full-screen window with no game loaded.
-Load game starts browsing from `project` (default: the current directory) and accepts project folders or `.ttea` files.
+**Load game** browses from `project` (default: current directory) and accepts project folders or `.ttea` files.
 
-- **Left two thirds**: the game, running in TTEA's runtime.
-- **Right third**: tracking source, skeleton preview, record and replay, and Load/Restart/Stop game (Exit once the game stops).
+- **Left two thirds**: the game, in TTEA's runtime.
+- **Right third**: tracking source, skeleton preview, record and replay, and Load/Restart/Stop game (Exit once stopped).
 
 | Tracking source | How it moves the player |
 | --- | --- |
-| Synthetic | Edit presets, joints, presence, and stale timestamps in the panel |
-| Mouse + keyboard | The mouse over the skeleton moves the whole player; hold A or D to plant the left or right foot |
-| Camera | Body pose, both index fingers pointing down, both whole hands, or the nose as the centre of the feet |
+| Mouse | Drag the skeleton in the preview to move both feet |
+| Keyboard | W A S D move the left foot; arrow keys move the right foot |
+| Camera | **Both hands**: each palm moves one foot. **Face (nose)**: the nose moves the centre of both feet |
 
-Synthetic and mouse sources need no camera, player registration, or calibration. The webcam opens only when you select Camera.
-Session results use temporary storage.
+Mouse and Keyboard need no camera, player registration, or calibration. The webcam opens only when you select Camera.
+Session results go to temporary storage.
 
 > **Note:** The runtime renders off-screen, so `pygame.mouse.get_pos` and `pygame.key.get_pressed` stay idle. Read input from `context.events`.
 
 ### Registered player tests per-player settings
 
-Off by default, the game runs as an anonymous player and `context.records` is `None`.
-Check **Registered player** to run it with `context.records`, backed by one JSON file per game id that survives restarts:
-`<data dir>/tsdk/players/<game id>.json`, where the data dir is Qt's generic data location (`~/Library/Application Support` on macOS, `~/.local/share` on Linux, `%LOCALAPPDATA%` on Windows).
+By default the game runs as an anonymous player, and `context.records` is `None`.
+Check **Registered player** to get `context.records`, backed by one JSON file per game id:
+`<data dir>/tsdk/players/<game id>.json`. The file survives restarts.
+The data dir is `~/Library/Application Support` on macOS, `~/.local/share` on Linux, and `%LOCALAPPDATA%` on Windows.
 The game's first registered start saves its defaults there.
 
-With a game loaded and **Registered player** checked, **Edit config…** opens that configuration as a JSON object. For example, set KarTEA's `"palette": 4` and `"horizon_image": "horizonnight"`.
-Save stops the game, writes the file, and restarts it; keys you delete fall back to the game's defaults.
+With a game loaded and **Registered player** checked, **Edit config…** opens that configuration as JSON.
+For example, set KarTEA's `"palette": 4` and `"horizon_image": "horizonnight"`.
+Save stops the game, writes the file, and restarts it. Deleted keys fall back to the game's defaults.
 **Reset** deletes the file, sessions included.
 
 ## Release builds need a clean Git checkout
 
-Exclude `dist/` in `.gitignore`, commit your changes, then run:
+Commit your changes, keep `dist/` in `.gitignore`, then run:
 
 ```sh
 uv run tsdk build --release --output dist/game.ttea
@@ -108,13 +109,13 @@ The output path cannot overwrite packaged source, `ttea.toml`, or `pyproject.tom
 
 `tsdk check` reads `ttea.toml` through `ttea.sdk.cartridge` and parses source without importing it.
 
-- **Dependencies**: `pyproject.toml` lists only `t-tea`, with the same bounded range as `requires_ttea`. Put tools in a development group.
+- **Dependencies**: `pyproject.toml` lists only `t-tea`, with the same range as `requires_ttea`. Put tools in a development group.
 - **Imports**: standard library, `pygame`, `numpy`, `ttea.sdk.api`, `ttea.sdk.tracking`, and the game's own modules.
 - **Calls**: no display setup, event pumping, clock, camera, `subprocess`, `eval`/`exec`, or dependency installation.
 - **Files**: no symlinks, hidden paths, compiled binaries, ML models, installers, or bundled platform libraries.
-- **Lifecycle**: the entrypoint class defines `start`, `update`, `draw`, `pause`, `resume`, and `stop` as synchronous `(self, context)` methods, or inherits them from `ttea.sdk.api.Game`.
+- **Lifecycle**: the entrypoint class defines synchronous `(self, context)` methods `start`, `update`, `draw`, `pause`, `resume`, and `stop`, or inherits them from `ttea.sdk.api.Game`.
 
-The checks enforce conventions; they are not a security sandbox.
+These checks enforce conventions; they are not a security sandbox.
 
 ## Game repositories reuse one CI workflow
 
@@ -130,12 +131,12 @@ jobs:
 
 | Input | Default | Purpose |
 | --- | --- | --- |
-| `ttea-ref`, `builder-ref` | required | TTEA and TSDK commits; pin reviewed ones |
+| `ttea-ref`, `builder-ref` | required | TTEA and TSDK refs; pin reviewed commits |
 | `project-path` | `.` | Game directory inside the repository |
-| `python-versions` | `["3.14"]` | Python versions to test |
+| `python-versions` | `'["3.14"]'` | JSON list of Python versions to test |
 | `release` | `false` | Build with `--release` |
 
-On Windows x86-64, Linux x86-64, and macOS ARM64, the workflow checks the game, runs its tests, and builds the cartridge.
+On Linux x86-64, Windows x86-64, and macOS ARM64, the workflow checks the game, runs its tests, and builds the cartridge.
 It then installs and runs the cartridge outside the checkout, including synthetic tracking loss and recovery.
 Private TTEA and TSDK repositories need the `TTEA_DEPLOY_KEY` and `TSDK_DEPLOY_KEY` secrets.
 Camera capture, projector alignment, audio, and latency still need testing on real hardware.
