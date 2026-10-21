@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import sys
+import threading
 import time
 
 from .tracking import Landmark, Observation, PROFILES
@@ -154,3 +155,42 @@ class HardwareProvider:
 
     def __exit__(self, *args):
         self.close()
+
+
+class ThreadedProvider:
+    """Reads a provider on a worker thread; read() returns the latest observation without waiting.
+
+    A camera read plus pose detection takes tens of milliseconds, so reading in the game loop
+    would hold the game's frame rate down to the camera's.
+    """
+
+    def __init__(self, provider):
+        self.profile = provider.profile
+        self.frame = None
+        self._provider = provider
+        self._observation = Observation(provider.profile, time.monotonic(), present=False)
+        self._error = None
+        self._lock = threading.Lock()
+        self._running = True
+        self._thread = threading.Thread(target=self._run, name="tsdk-camera", daemon=True)
+        self._thread.start()
+
+    def _run(self):
+        try:
+            while self._running:
+                observation = self._provider.read()
+                with self._lock:
+                    self._observation, self.frame = observation, self._provider.frame
+        except Exception as error:
+            self._error = error
+
+    def read(self):
+        with self._lock:
+            if self._error is not None:
+                raise self._error
+            return self._observation
+
+    def close(self):
+        self._running = False
+        self._thread.join()
+        self._provider.close()

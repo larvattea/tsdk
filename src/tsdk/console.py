@@ -90,6 +90,7 @@ def console_config(data_dir: Path, language: str, player_id: str, professional_i
         "width": hardware["screen_width"],
         "height": hardware["screen_height"],
         "display": hardware["screen_position"],
+        "monitor": {"points": points},
         "language": language,
         "player_id": player_id,
         "professional_id": professional_id,

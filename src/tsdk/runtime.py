@@ -83,9 +83,16 @@ def run_game(project: Path, manifest: dict, *, simulation: bool = False,
                 from .simulator import SimulatorProvider
                 provider = SimulatorProvider(profile)
         else:
-            from .providers import HardwareProvider
-            provider = HardwareProvider(profile, **config.get("hardware", {}))
+            from .providers import HardwareProvider, ThreadedProvider
+            provider = ThreadedProvider(HardwareProvider(profile, **config.get("hardware", {})))
         resources.callback(provider.close)
+        monitor = None
+        if config.get("monitor") and replay is None and not simulation:
+            from .monitor import CameraMonitor
+            title = localized({"en-US": "Camera view", "es-ES": "Pantalla de captura", "pt-BR": "Tela de Captura"},
+                              language, "Camera view")
+            monitor = CameraMonitor(title, config["monitor"]["points"])
+            resources.callback(monitor.close)
         if replay is not None and provider.profile != profile:
             raise ValueError("Replay tracking profile differs from the game profile")
         calibration = provider.calibration if replay is not None else config.get("calibration")
@@ -130,6 +137,7 @@ def run_game(project: Path, manifest: dict, *, simulation: bool = False,
         clock = pygame.time.Clock()
         user_paused = False
         frames = 0
+        last_observation = None
         result = None
         stop_file = Path(config["stop_file"]) if config.get("stop_file") else None
         show_feet = bool(config.get("show_feet", True))
@@ -158,8 +166,13 @@ def run_game(project: Path, manifest: dict, *, simulation: bool = False,
                     context.request_stop()
                     break
                 now = provider.now if replay is not None else time.monotonic()
-                if recorder is not None:
-                    recorder.write(observation, now=now)
+                # A threaded camera returns the same observation until it detects a new frame.
+                if observation is not last_observation:
+                    last_observation = observation
+                    if monitor is not None:
+                        monitor.show(provider.frame, observation)
+                    if recorder is not None:
+                        recorder.write(observation, now=now)
                 context.tracking = pipeline.process(observation, now=now)
                 lost = context.tracking.missing or context.tracking.stale
                 reason = "user" if user_paused else "tracking_loss" if lost else None
