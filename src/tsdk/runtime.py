@@ -50,11 +50,19 @@ def run_game(project: Path, manifest: dict, *, simulation: bool = False,
         if config.get("frame_buffer"):
             # Developer mode shows the frames in its own window.
             os.environ["SDL_VIDEODRIVER"] = "dummy"
+        if config.get("display") is not None:
+            # The operator works on the other screen: losing focus must not minimize the game.
+            os.environ["SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS"] = "0"
         pygame.init()
         resources.callback(pygame.quit)
         default_width, default_height = manifest.get("resolution", DEFAULT_RESOLUTION)
         size = (int(config.get("width", default_width)), int(config.get("height", default_height)))
-        surface = pygame.display.set_mode(size)
+        if config.get("display") is None:
+            surface = pygame.display.set_mode(size)
+        else:
+            # Fill the projector. macOS keeps borderless windows under its menu bar; only fullscreen covers it.
+            flags = pygame.FULLSCREEN if sys.platform == "darwin" else pygame.NOFRAME
+            surface = pygame.display.set_mode(size, flags, display=int(config["display"]))
         frames_out = inputs = None
         if config.get("frame_buffer"):
             from .embedding import FrameWriter

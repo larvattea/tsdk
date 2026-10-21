@@ -4,8 +4,8 @@ TTEA writes `<data-dir>/calibration/` with Qt's INI format and a semicolon CSV; 
 Upstream records neither the frame size the corners were picked in nor whether that frame was
 mirrored. Its calibration screens open the camera without a size request, so the points are pixels
 of the camera's default frame; tsdk opens the camera the same way and measures that size. Like
-TTEA's own runtime (KarTEA), it reads them as content corners top-left, top-right, bottom-left,
-bottom-right of the horizontally mirrored frame.
+TTEA's own runtime (KarTEA), it reads them as the projected screen's corners top-left, top-right,
+bottom-left, bottom-right of the horizontally mirrored frame, and fills that screen with the game.
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def _calibration_file(data_dir: Path, name: str) -> Path:
 
 
 def read_hardware(path: Path) -> dict:
-    """Camera index plus projected content size from calibration_hardware.ini."""
+    """Camera index plus the projector's screen index and size from calibration_hardware.ini."""
     parser = configparser.ConfigParser(interpolation=None)
     try:
         parser.read(path, encoding="utf-8")
@@ -40,13 +40,14 @@ def read_hardware(path: Path) -> dict:
     if not parser.get("camera", "camera_id", fallback="").strip():
         raise ValueError(f"{path}: no camera saved; save the hardware configuration in TTEA")
     values = {}
-    for section, key in (("camera", "camera_position"), ("content", "content_width"), ("content", "content_height")):
+    for section, key in (("camera", "camera_position"), ("screen", "screen_position"),
+                         ("screen", "screen_width"), ("screen", "screen_height")):
         try:
             values[key] = parser.getint(section, key)
         except (configparser.Error, ValueError) as error:
             raise ValueError(f"{path}: invalid {section}/{key}") from error
-    if min(values["content_width"], values["content_height"]) <= 0:
-        raise ValueError(f"{path}: content size must be positive; save the hardware configuration in TTEA")
+    if min(values["screen_width"], values["screen_height"]) <= 0:
+        raise ValueError(f"{path}: screen size must be positive; save the hardware configuration in TTEA")
     return values
 
 
@@ -86,8 +87,9 @@ def console_config(data_dir: Path, language: str, player_id: str, professional_i
     return {
         "hardware": {"camera_index": hardware["camera_position"]},
         "calibration": {"homography": homography(points, width, height)},
-        "width": hardware["content_width"],
-        "height": hardware["content_height"],
+        "width": hardware["screen_width"],
+        "height": hardware["screen_height"],
+        "display": hardware["screen_position"],
         "language": language,
         "player_id": player_id,
         "professional_id": professional_id,

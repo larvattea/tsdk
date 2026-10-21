@@ -43,7 +43,7 @@ screen_serial_number=
 screen_width=1680
 """
 # Upstream CalibrationPointCsvDAO: CSVHandler's ";" dialect, header from CalibrationPoint.PROPERTIES.
-# Content corners TL, TR, BL, BR in pixels of the camera's default (here 640x480) mirrored frame, as
+# Projected screen corners TL, TR, BL, BR in pixels of the camera's default (here 640x480) mirrored frame, as
 # TTEA's calibration screens pick them; the ini's 1280x720 Qt camera format plays no part.
 POINTS = "pointx1;pointy1;pointx2;pointy2;pointx3;pointy3;pointx4;pointy4\n50;40;590;40;50;440;590;440\n"
 
@@ -68,7 +68,7 @@ class ConsoleCalibrationTest(unittest.TestCase):
             config = console_config(self.data, "pt_BR", "7", "3", "example.game")
         frame_size.assert_called_once_with(1)
         self.assertEqual(config["hardware"], {"camera_index": 1})
-        self.assertEqual((config["width"], config["height"]), (1600, 900))
+        self.assertEqual((config["width"], config["height"], config["display"]), (1680, 1050, 0))
         self.assertEqual((config["language"], config["player_id"], config["professional_id"]), ("pt_BR", "7", "3"))
         self.assertEqual(config["session_root"], str(self.data / "tsdk"))
         self.assertEqual(config["records"], str(self.data / "tsdk" / "example.game" / "records" / "7.json"))
