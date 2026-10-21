@@ -186,7 +186,7 @@ def run_game(project: Path, manifest: dict, *, simulation: bool = False,
                 if not context.paused and not context.stop_requested:
                     game.update(context)
                 game.draw(context)
-                if show_feet and not context.tracking.missing:
+                if show_feet and getattr(game, "show_feet", True) and not context.tracking.missing:
                     outside = context.tracking.out_of_area
                     draw_feet(surface, {side: (point.x, point.y)
                                         for side, point in context.tracking.feet.items()

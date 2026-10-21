@@ -106,6 +106,8 @@ class GameContext:
 class Game:
     """Subclass and override callbacks; the platform owns the event loop."""
 
+    show_feet = True  # False: the platform draws no footprints (the game shows the player itself)
+
     def start(self, context: GameContext) -> None:
         pass
 

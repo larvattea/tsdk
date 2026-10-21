@@ -111,10 +111,12 @@ It reads TTEA's calibration without changing it:
 
 | File in `<data-dir>/calibration/` | Used for |
 | --- | --- |
-| `calibration_hardware.ini` | Camera index (`[camera] camera_position`), game surface size (`[content]`) |
+| `calibration_hardware.ini` | Camera index (`[camera] camera_position`), projector screen and its size (`[screen]`) |
 | `calibration_point.csv` | The four floor corners, which give the camera-to-game homography |
 
-The corners are read as TTEA's own games read them: top-left, top-right, bottom-left, bottom-right, in pixels of the mirrored camera image. TTEA's calibration screens open the camera without a size request, so `tsdk play` does the same and measures that default frame size.
+The corners are read as TTEA's own games read them: top-left, top-right, bottom-left, bottom-right of the projected screen, in pixels of the mirrored camera image. TTEA's calibration screens open the camera without a size request, so `tsdk play` does the same and measures that default frame size.
+The game fills the projector screen; a window on the operator's screen shows the camera with the calibrated area and the detected skeleton.
+The platform draws the player's footprints over the game; a game that marks the player itself sets `show_feet = False` on its `tsdk.api.Game` subclass.
 Game data stays under `<data-dir>/tsdk/<game id>/`: saves and results in `<player id>/`, registered-player records in `records/<player id>.json`.
 The exit code is 0 after a normal quit and 1, with a message on stderr, for an invalid or incompatible cartridge or missing calibration.
 
