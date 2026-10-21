@@ -64,7 +64,7 @@ requires-python = ">=3.14"
 dependencies = ["tsdk>=0.2,<0.3"]
 
 [tool.uv.sources]
-tsdk = {{ git = "https://github.com/laurogripa/tsdk", branch = "main" }}
+tsdk = {{ git = "https://github.com/larvattea/tsdk", branch = "main" }}
 ''',
         "game.py": GAME,
         ".gitignore": ".venv/\n__pycache__/\n*.pyc\ndist/\n",

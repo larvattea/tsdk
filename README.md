@@ -1,6 +1,6 @@
 # TSDK: SDK for Serious Exergames
 
-TSDK is the game platform for [TTEA](https://github.com/laurogripa/ttea), the interactive-floor exergame console.
+TSDK is the game platform for [TTEA](https://github.com/larvattea/ttea), the interactive-floor exergame console.
 It owns the game API, tracking, cartridge format, runtime, camera providers, simulator, and developer mode.
 Games depend only on `tsdk`; TTEA runs their cartridges through `tsdk play`.
 
@@ -99,7 +99,7 @@ Save stops the game, writes the file, and restarts it. Deleted keys fall back to
 
 ## TTEA plays cartridges with `tsdk play`
 
-TTEA (branch `developer-mode`) lists `.ttea` files in its games folder and runs them with the `tsdk` command it finds on `PATH` or in `~/.local/bin`, so install tsdk once with `uv tool install --python 3.14 git+https://github.com/laurogripa/tsdk`. Each session starts from the folder holding the cartridge:
+TTEA (branch `developer-mode`) lists `.ttea` files in its games folder and runs them with the `tsdk` command it finds on `PATH` or in `~/.local/bin`, so install tsdk once with `uv tool install --python 3.14 git+https://github.com/larvattea/tsdk`. Each session starts from the folder holding the cartridge:
 
 ```sh
 tsdk play game.ttea --lang pt_BR --player_id 7 --professional_id 3 --data-dir "<TTEA user data dir>"
@@ -147,7 +147,7 @@ These checks enforce conventions; they are not a security sandbox.
 ```yaml
 jobs:
   tsdk:
-    uses: laurogripa/tsdk/.github/workflows/game.yml@main
+    uses: larvattea/tsdk/.github/workflows/game.yml@main
     with:
       builder-ref: main
     secrets: inherit
