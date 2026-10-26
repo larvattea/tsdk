@@ -1,51 +1,118 @@
-# TSDK: SDK for Serious Exergames
+<h1>TSDK</h1>
 
-TSDK is the game platform for [TTEA](https://github.com/larvattea/ttea), the interactive-floor exergame console.
-It owns the game API, tracking, cartridge format, runtime, camera providers, simulator, and developer mode.
-Games depend only on `tsdk`; TTEA runs their cartridges through `tsdk play`.
+<h3>Plataforma para criar jogos do T-TEA</h3>
 
-## Start a game in six commands
+<p align="justify">
+  O TSDK é a base dos jogos do <a href="https://github.com/larvattea/ttea">T-TEA</a>, o console de exergames de chão interativo.
+  O jogo cuida só das regras e do desenho. O TSDK cuida da janela, da câmera, do rastreamento e da calibração.
+</p>
 
-Keep `tsdk` and your games in one parent directory, then run:
+<p align="justify">
+  Cada jogo vira um cartucho <code>.ttea</code>, que o T-TEA instala e executa.
+  Os jogos dependem apenas do <code>tsdk</code>.
+</p>
 
-```sh
+## Desenvolvimento
+
+### Requisitos
+
+- [uv](https://docs.astral.sh/uv/). Ele baixa o Python 3.14 e as dependências sozinho.
+- Windows x86-64, Linux x86-64 ou macOS ARM, as plataformas testadas no CI.
+
+O uv instala apenas pacotes pré-compilados, então não é preciso compilador nem Visual Studio.
+
+### Instalar o uv
+
+macOS:
+
+```bash
+brew install uv
+```
+
+Windows (PowerShell):
+
+```powershell
+winget install --id=astral-sh.uv -e
+```
+
+Linux:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### Criar um jogo em seis comandos
+
+Deixe o `tsdk` e os jogos na mesma pasta e rode:
+
+```bash
 cd tsdk
 uv sync --locked
-uv run tsdk new ../example-game --profile body
-cd ../example-game
+uv run tsdk new ../meu-jogo --profile body
+cd ../meu-jogo
 uv lock
 uv run tsdk dev
 ```
 
-| Command | Result |
+O `--profile` escolhe o rastreamento: `body` (corpo), `hands` (mãos) ou `face` (rosto).
+O projeto novo baixa o `tsdk` do GitHub. Para usar a cópia local, mude a fonte no `pyproject.toml`: `tsdk = { path = "../tsdk", editable = true }`.
+Faça commit do `uv.lock` de cada jogo.
+
+### Cinco comandos cobrem todo o ciclo
+
+| Comando | O que faz |
 | --- | --- |
-| `tsdk new DEST [--id ID] [--name NAME] [--profile body\|hands\|face]` | Project with `ttea.toml`, `pyproject.toml`, `game.py`, `.gitignore`, and `LICENSE` |
-| `tsdk check [project]` | Validates manifest and source without running the game |
-| `tsdk dev [project]` | Opens developer mode |
-| `tsdk build [project] [--output OUTPUT] [--release]` | Writes `dist/<id>-<version>.ttea` |
-| `tsdk play CARTRIDGE --lang LANG --player_id ID --professional_id ID --data-dir DIR` | Runs a cartridge for the TTEA console |
+| `tsdk new DESTINO [--id ID] [--name NOME] [--profile body\|hands\|face]` | Cria o projeto: `ttea.toml`, `pyproject.toml`, `game.py`, `.gitignore` e `LICENSE` |
+| `tsdk check [projeto]` | Valida o manifesto e o código sem executar o jogo |
+| `tsdk dev [projeto]` | Abre o modo de desenvolvimento |
+| `tsdk build [projeto] [--output ARQUIVO] [--release]` | Gera `dist/<id>-<versão>.ttea` |
+| `tsdk play CARTUCHO --lang IDIOMA --player_id ID --professional_id ID --data-dir PASTA` | Executa um cartucho no console T-TEA |
 
-A new game's `pyproject.toml` declares one runtime dependency, `tsdk>=0.2,<0.3`, installed from GitHub through `[tool.uv.sources]`.
-To develop against a local checkout, use `tsdk = { path = "../tsdk", editable = true }` there instead.
-Commit each game's `uv.lock`.
+### O jogo é uma classe com seis métodos
 
-## A `.ttea` file is a game TTEA can install
+O TSDK chama `start`, `update`, `draw`, `pause`, `resume` e `stop` a cada etapa do jogo.
+Herde de `tsdk.api.Game` e implemente só os métodos que usar:
 
-A `.ttea` file is a ZIP archive that TTEA validates, installs, and runs. It holds:
+```python
+import pygame
+from tsdk.api import Game, GameContext
 
-- the entrypoint module, root Python modules, and top-level packages
-- the assets and license notices listed in `ttea.toml`
-- `manifest.json`, generated from `ttea.toml` at build time
 
-You write `ttea.toml`. This one is from Ginga Divina:
+class MeuJogo(Game):
+    def start(self, context: GameContext):
+        self.segundos = 0.0
+
+    def update(self, context: GameContext):
+        self.segundos += context.dt  # o TSDK não chama update com o jogo pausado
+
+    def draw(self, context: GameContext):
+        context.surface.fill((20, 25, 35))
+        largura, altura = context.surface.get_size()
+        for pe in context.tracking.feet.values():
+            pygame.draw.circle(context.surface, (80, 220, 160), (round(pe.x * largura), round(pe.y * altura)), 12)
+
+    def stop(self, context: GameContext):
+        return {"segundos_ativos": self.segundos}  # salvo como resultado da sessão
+```
+
+- `context.tracking.feet` traz os pés em coordenadas de 0 a 1 sobre a tela do jogo.
+- Leia teclado e mouse em `context.events`, não em `pygame.mouse` ou `pygame.key`.
+- Para botões no chão, use `FloorSelector` e `feet_centre`: o jogador escolhe ficando 2 s sobre o botão.
+- Para encerrar, chame `context.request_stop(resultado)`.
+- Se o jogo desenha o próprio jogador, defina `show_feet = False` na classe para esconder as pegadas.
+
+### O cartucho `.ttea` guarda o jogo inteiro
+
+O cartucho é um ZIP com o código, os recursos (`assets`) e as licenças listados no `ttea.toml`.
+Você escreve o `ttea.toml`; este é o do Ginga Divina:
 
 ```toml
 [game]
 id = "gingadivina"
 version = "2.0.0"
 entrypoint = "game.main:GingaDivina"
-tracking_profile = "body"   # body, hands, or face
-resolution = [800, 600]     # optional; default 800x600 (4:3)
+tracking_profile = "body"   # body, hands ou face
+resolution = [800, 600]     # opcional; padrão 800x600 (4:3)
 game_api = 1
 requires_tsdk = ">=0.2,<0.3"
 assets = ["assets"]
@@ -56,95 +123,75 @@ pt = "Ginga Divina"
 en = "Ginga Divina"
 ```
 
-The build adds these provenance fields to `manifest.json`; games cannot set them:
+O `tsdk build` gera o `manifest.json` a partir dele, com a versão do TSDK e o commit ([Apêndice](#apêndice-campos-que-o-build-adiciona)).
 
-| Field | Value |
+### O modo de desenvolvimento testa o jogo sem o console
+
+`uv run tsdk dev [projeto]` abre uma janela em tela cheia, ainda sem jogo.
+Em **Load game**, escolha uma pasta de projeto ou um `.ttea`. Cartuchos na pasta `games/` do TSDK aparecem direto no menu.
+O jogo ocupa dois terços da tela; o terço da direita controla o rastreamento, a gravação e o jogo.
+
+| Fonte de rastreamento | Como move o jogador |
 | --- | --- |
-| `format_version` | `1` |
-| `builder.version` | Installed `tsdk` version |
-| `build.source_commit` | Git `HEAD`, or `"unversioned"` outside Git |
-| `build.dirty` | `true` with uncommitted or untracked files |
+| Mouse | Arraste o esqueleto na prévia para mover os dois pés |
+| Teclado | W A S D movem o pé esquerdo; as setas, o pé direito |
+| Câmera | **Both hands**: cada palma move um pé. **Face (nose)**: o nariz move o centro dos pés |
 
-## Developer mode runs your game beside tracking tools
+Mouse e teclado dispensam câmera, cadastro e calibração. A webcam só abre ao escolher **Camera**.
 
-`uv run tsdk dev [project]` opens a full-screen window with no game loaded.
-**Load game** browses from `project` (default: current directory) and accepts project folders or `.ttea` files.
+Por padrão, o jogador é anônimo e `context.records` vale `None`.
+Marque **Registered player** para testar configurações por jogador, salvas em `<pasta de dados>/tsdk/players/<id do jogo>.json`.
+**Edit config…** edita esse JSON e reinicia o jogo; **Reset** apaga o arquivo.
+A pasta de dados é `%LOCALAPPDATA%` no Windows, `~/.local/share` no Linux e `~/Library/Application Support` no macOS.
 
-- **Left two thirds**: the game, in the TSDK runtime.
-- **Right third**: tracking source, skeleton preview, record and replay, and Load/Restart/Stop game (Exit once stopped).
+### O T-TEA executa o cartucho com `tsdk play`
 
-| Tracking source | How it moves the player |
-| --- | --- |
-| Mouse | Drag the skeleton in the preview to move both feet |
-| Keyboard | W A S D move the left foot; arrow keys move the right foot |
-| Camera | **Both hands**: each palm moves one foot. **Face (nose)**: the nose moves the centre of both feet |
+Instale o `tsdk` uma vez no computador do console:
 
-Mouse and Keyboard need no camera, player registration, or calibration. The webcam opens only when you select Camera.
-Session results go to temporary storage.
-
-> **Note:** The runtime renders off-screen, so `pygame.mouse.get_pos` and `pygame.key.get_pressed` stay idle. Read input from `context.events`.
-
-### Registered player tests per-player settings
-
-By default the game runs as an anonymous player, and `context.records` is `None`.
-Check **Registered player** to get `context.records`, backed by one JSON file per game id:
-`<data dir>/tsdk/players/<game id>.json`. The file survives restarts.
-The data dir is `~/Library/Application Support` on macOS, `~/.local/share` on Linux, and `%LOCALAPPDATA%` on Windows.
-The game's first registered start saves its defaults there.
-
-With a game loaded and **Registered player** checked, **Edit config…** opens that configuration as JSON.
-For example, set KarTEA's `"palette": 4` and `"horizon_image": "horizonnight"`.
-Save stops the game, writes the file, and restarts it. Deleted keys fall back to the game's defaults.
-**Reset** deletes the file, sessions included.
-
-## TTEA plays cartridges with `tsdk play`
-
-TTEA (branch `developer-mode`) lists `.ttea` files in its games folder and runs them with the `tsdk` command it finds on `PATH` or in `~/.local/bin`, so install tsdk once with `uv tool install --python 3.14 git+https://github.com/larvattea/tsdk`. Each session starts from the folder holding the cartridge:
-
-```sh
-tsdk play game.ttea --lang pt_BR --player_id 7 --professional_id 3 --data-dir "<TTEA user data dir>"
+```bash
+uv tool install --python 3.14 git+https://github.com/larvattea/tsdk
 ```
 
-`--data-dir` is TTEA's `platformdirs.user_data_dir("ttea", "udesc")`.
-`tsdk play` validates the cartridge, including `requires_tsdk` against the installed `tsdk`, then runs it with the camera.
-It reads TTEA's calibration without changing it:
+O T-TEA (branch `developer-mode`) lista os `.ttea` da pasta de jogos e executa cada um assim:
 
-| File in `<data-dir>/calibration/` | Used for |
-| --- | --- |
-| `calibration_hardware.ini` | Camera index (`[camera] camera_position`), projector screen and its size (`[screen]`) |
-| `calibration_point.csv` | The four floor corners, which give the camera-to-game homography |
-
-The corners are read as TTEA's own games read them: top-left, top-right, bottom-left, bottom-right of the projected screen, in pixels of the mirrored camera image. TTEA's calibration screens open the camera without a size request, so `tsdk play` does the same and measures that default frame size.
-The game fills the projector screen; a window on the operator's screen shows the camera with the calibrated area and the detected skeleton.
-The platform draws the player's footprints over the game; a game that marks the player itself sets `show_feet = False` on its `tsdk.api.Game` subclass.
-Game data stays under `<data-dir>/tsdk/<game id>/`: saves and results in `<player id>/`, registered-player records in `records/<player id>.json`.
-The exit code is 0 after a normal quit and 1, with a message on stderr, for an invalid or incompatible cartridge or missing calibration.
-
-## Release builds need a clean Git checkout
-
-Commit your changes, keep `dist/` in `.gitignore`, then run:
-
-```sh
-uv run tsdk build --release --output dist/game.ttea
+```bash
+tsdk play jogo.ttea --lang pt_BR --player_id 7 --professional_id 3 --data-dir "<pasta de dados do T-TEA>"
 ```
 
-Release builds fail on unversioned source, modified files, or untracked files.
-Every packaged file must be tracked, including assets your `.gitignore` excludes.
-The output path cannot overwrite packaged source, `ttea.toml`, or `pyproject.toml`.
+O `tsdk play` valida o cartucho, confere o `requires_tsdk` e lê a calibração do T-TEA sem alterá-la:
 
-## Checks enforce the TTEA game contract
+| Arquivo em `<data-dir>/calibration/` | Uso |
+| --- | --- |
+| `calibration_hardware.ini` | Qual câmera usar, e qual tela é o projetor e seu tamanho |
+| `calibration_point.csv` | Os quatro cantos do chão projetado |
 
-`tsdk check` reads `ttea.toml` through `tsdk.cartridge` and parses source without importing it.
+O jogo ocupa a tela do projetor, e o operador vê a câmera com o esqueleto em outra janela.
+Os dados ficam em `<data-dir>/tsdk/<id do jogo>/`.
+O comando sai com 0 ao fim normal, e com 1 para cartucho inválido ou incompatível ou calibração ausente.
 
-- **Dependencies**: `pyproject.toml` lists only `tsdk`, with lower and upper bounds and the same range as `requires_tsdk`. Put tools in a development group.
-- **Imports**: standard library, `pygame`, `numpy`, `tsdk.api`, `tsdk.tracking`, and the game's own modules. Every other `tsdk` module is platform-owned.
-- **Calls**: no display setup, event pumping, clock, camera, `subprocess`, `eval`/`exec`, or dependency installation.
-- **Files**: no symlinks, hidden paths, compiled binaries, ML models, installers, or bundled platform libraries.
-- **Lifecycle**: the entrypoint class defines synchronous `(self, context)` methods `start`, `update`, `draw`, `pause`, `resume`, and `stop`, or inherits them from `tsdk.api.Game`.
+### A versão final exige um Git limpo
 
-These checks enforce conventions; they are not a security sandbox.
+Faça commit de tudo, deixe `dist/` no `.gitignore` e rode:
 
-## Game repositories reuse one CI workflow
+```bash
+uv run tsdk build --release --output dist/jogo.ttea
+```
+
+O build falha com arquivos modificados ou fora do Git. Todo arquivo empacotado precisa estar versionado, inclusive recursos que o `.gitignore` ignora.
+
+### O `tsdk check` aplica as regras do T-TEA
+
+| Regra | O que exige |
+| --- | --- |
+| Dependências | O `pyproject.toml` lista só o `tsdk`, com a mesma faixa de versão do `requires_tsdk` |
+| Imports | Biblioteca padrão, `pygame`, `numpy`, `tsdk.api`, `tsdk.tracking` e os módulos do jogo |
+| Chamadas | Sem janela, eventos, relógio, câmera, `subprocess`, `eval`/`exec` ou instalação de pacotes |
+| Arquivos | Sem links, arquivos ocultos, binários, modelos de ML ou bibliotecas da plataforma |
+| Ciclo de vida | A classe de entrada tem os seis métodos com `(self, context)`, ou herda de `tsdk.api.Game` |
+
+Essas regras são convenções, não um sandbox de segurança.
+
+### Os jogos reutilizam um CI pronto
 
 ```yaml
 jobs:
@@ -155,14 +202,24 @@ jobs:
     secrets: inherit
 ```
 
-| Input | Default | Purpose |
-| --- | --- | --- |
-| `builder-ref` | required | TSDK ref; pin a reviewed commit |
-| `project-path` | `.` | Game directory inside the repository |
-| `python-versions` | `'["3.14"]'` | JSON list of Python versions to test |
-| `release` | `false` | Build with `--release` |
+No Windows, Linux e macOS, o CI valida o jogo, roda os testes e gera o cartucho.
+Depois, instala e executa o cartucho, simulando perda e retorno do rastreamento.
+Câmera, projetor, áudio e latência ainda precisam de teste no hardware real.
 
-On Linux x86-64, Windows x86-64, and macOS ARM64, the workflow checks the game, runs its tests, and builds the cartridge.
-It then installs and runs the cartridge outside the checkout, including synthetic tracking loss and recovery.
-A private TSDK repository needs the `TSDK_DEPLOY_KEY` secret.
-Camera capture, projector alignment, audio, and latency still need testing on real hardware.
+| Entrada | Padrão | Uso |
+| --- | --- | --- |
+| `builder-ref` | obrigatório | Ref do TSDK; fixe um commit revisado |
+| `project-path` | `.` | Pasta do jogo no repositório |
+| `python-versions` | `'["3.14"]'` | Versões do Python testadas, em JSON |
+| `release` | `false` | Gera com `--release` |
+
+### Apêndice: campos que o build adiciona
+
+O jogo não pode definir estes campos do `manifest.json`:
+
+| Campo | Valor |
+| --- | --- |
+| `format_version` | `1` |
+| `builder.version` | Versão instalada do `tsdk` |
+| `build.source_commit` | `HEAD` do Git, ou `"unversioned"` fora do Git |
+| `build.dirty` | `true` se houver arquivos modificados ou fora do Git |
