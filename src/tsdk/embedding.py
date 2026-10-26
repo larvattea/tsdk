@@ -59,7 +59,11 @@ class FrameReader:
                     return None
                 self._map = mmap.mmap(file.fileno(), size, access=mmap.ACCESS_READ)
         sequence, width, height = HEADER.unpack_from(self._map)
-        if sequence == self._sequence or sequence % 2 or HEADER.size + width * height * 4 != len(self._map):
+        if HEADER.size + width * height * 4 != len(self._map):
+            # Mapped while the writer was still sizing the file (Windows grows it in steps): map it again.
+            self.close()
+            return None
+        if sequence == self._sequence or sequence % 2:
             return None
         pixels = self._map[HEADER.size:]
         if SEQUENCE.unpack_from(self._map)[0] != sequence:

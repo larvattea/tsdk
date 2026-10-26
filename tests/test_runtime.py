@@ -8,7 +8,7 @@ from unittest import mock
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
-from tsdk.embedding import FrameReader
+from tsdk.embedding import HEADER, FrameReader
 from tsdk.runtime import run_game
 from tsdk.simulator import SimulatorProvider
 from tsdk.tracking import Observation, Recording
@@ -129,6 +129,20 @@ class Embedded(Game):
             self.assertEqual((width, height), (32, 24))
             self.assertEqual(pixels[:4], bytes((12, 34, 56, 255)))
             self.assertEqual(len(set(pixels[i:i + 4] for i in range(0, len(pixels), 4))), 1)
+
+
+class FrameReaderTest(unittest.TestCase):
+    def test_reader_that_maps_a_half_sized_file_maps_it_again(self):
+        """Windows grows a truncated file in steps, so the reader can map it before it reaches full size."""
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "frame.bin"
+            header = HEADER.pack(2, 4, 3)
+            path.write_bytes(header + bytes(10))
+            frames = FrameReader(path)
+            self.assertIsNone(frames.read())
+            path.write_bytes(header + bytes(4 * 3 * 4))
+            self.assertEqual(frames.read()[:2], (4, 3))
+            frames.close()
 
 
 if __name__ == "__main__":

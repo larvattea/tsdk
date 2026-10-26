@@ -158,7 +158,10 @@ def write_state(path, provider):
     temporary = path.with_suffix('.tmp')
     observation = provider.read()
     temporary.write_text(json.dumps({'observation':observation_to_dict(observation), 'stale':provider.stale}, allow_nan=False), encoding='utf-8')
-    temporary.replace(path)
+    try:
+        temporary.replace(path)
+    except PermissionError:
+        pass  # Windows: the game has the file open; the next tick writes it again
     return observation
 
 
@@ -170,7 +173,12 @@ class FileSimulatorProvider:
         self.observation = None
 
     def read(self):
-        state = json.loads(self.path.read_text(encoding='utf-8'))
+        try:
+            text = self.path.read_text(encoding='utf-8')
+        except PermissionError:
+            # Windows: the panel is replacing the file; keep the last snapshot
+            return self.observation or Observation(self.profile, 0.0, {}, present=False)
+        state = json.loads(text)
         observation = observation_from_dict(state['observation'])
         if observation.profile != self.profile:
             raise ValueError('Simulator profile does not match game profile')
