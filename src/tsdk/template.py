@@ -60,7 +60,7 @@ en = {json.dumps(name)}
         "pyproject.toml": f'''[project]
 name = {json.dumps(game_id)}
 version = "0.1.0"
-requires-python = ">=3.14"
+requires-python = ">=3.14,<3.15"
 dependencies = ["tsdk>=0.2,<0.3"]
 
 [tool.uv.sources]

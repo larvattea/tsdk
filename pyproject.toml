@@ -2,7 +2,8 @@
 name = "tsdk"
 version = "0.2.0"
 description = "TSDK: platform and SDK for serious exergames on TTEA"
-requires-python = ">=3.14"
+# Raise the cap only once every dependency ships wheels for the next Python (mediapipe's contourpy had none for 3.15).
+requires-python = ">=3.14,<3.15"
 dependencies = [
     # 1.0.1 aborts in PoseLandmarker on macOS ("graph_service.h: Service is unavailable").
     "mediapipe==1.0.0",
@@ -11,7 +12,9 @@ dependencies = [
     "packaging>=26,<27",
     "platformdirs==4.12.3",
     "pygame-ce==2.5.8",
-    "pyside6>=6.11,<7",
+    # Not the pyside6 metapackage, which also installs WebEngine and Pdf. Addons holds QtMultimedia.
+    "pyside6-essentials>=6.12,<7",
+    "pyside6-addons>=6.12,<7",
 ]
 
 [project.scripts]
@@ -26,3 +29,13 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 tsdk = ["*.txt", "models/*.task", "models/*.txt"]
+
+[tool.uv]
+# Install wheels only: building a dependency from source needs a C/C++ compiler (Visual Studio on Windows).
+no-build = true
+# Locking fails if a dependency lacks a wheel for a platform CI tests (see game.yml).
+required-environments = [
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
