@@ -3,11 +3,15 @@ import contextlib
 import io
 from pathlib import Path
 import tempfile
+import sys
 import unittest
 from unittest.mock import patch
 
+import numpy
+
 from tsdk.cli import main
 from tsdk.console import console_config
+from tsdk.providers import default_frame_size
 
 # QSettings IniFormat output of upstream CalibrationIniDAO: one section per field prefix, sorted.
 HARDWARE = """[camera]
@@ -94,6 +98,54 @@ class ConsoleCalibrationTest(unittest.TestCase):
                          "--professional_id", "1", "--data-dir", str(self.data)])
         self.assertEqual(code, 1)
         self.assertTrue(stderr.getvalue().startswith("tsdk: "))
+
+
+class FakeCamera:
+    """Opened camera whose first reads return no frame, as AVFoundation does on macOS."""
+
+    def __init__(self, empty_reads):
+        self.empty_reads = empty_reads
+        self.released = False
+
+    def isOpened(self):
+        return True
+
+    def read(self):
+        if self.empty_reads:
+            self.empty_reads -= 1
+            return False, None
+        return True, numpy.zeros((720, 1280, 3), dtype=numpy.uint8)
+
+    def release(self):
+        self.released = True
+
+
+class DefaultFrameSizeTest(unittest.TestCase):
+    def test_waits_for_the_first_frame(self):
+        camera = FakeCamera(empty_reads=5)
+        with patch("tsdk.providers._open_camera", return_value=camera):
+            self.assertEqual(default_frame_size(0), (1280, 720))
+        self.assertTrue(camera.released)
+
+    def test_camera_without_frames_fails_after_timeout(self):
+        camera = FakeCamera(empty_reads=10**6)
+        with patch("tsdk.providers._open_camera", return_value=camera):
+            with self.assertRaisesRegex(RuntimeError, "Unable to read camera 2"):
+                default_frame_size(2, timeout=0.2)
+        self.assertTrue(camera.released)
+
+
+class DeveloperExtraTest(unittest.TestCase):
+    def test_dev_without_pyside6_names_the_extra(self):
+        # Hide PySide6 as if the dev extra were not installed
+        hidden = {name: None for name in sys.modules if name.partition(".")[0] == "PySide6"}
+        hidden["PySide6"] = None
+        stderr = io.StringIO()
+        with patch.dict(sys.modules, hidden), contextlib.redirect_stderr(stderr):
+            sys.modules.pop("tsdk.developer", None)
+            code = main(["dev"])
+        self.assertEqual(code, 1)
+        self.assertIn("tsdk[dev]", stderr.getvalue())
 
 
 if __name__ == "__main__":

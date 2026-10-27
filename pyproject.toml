@@ -12,10 +12,19 @@ dependencies = [
     "packaging>=26,<27",
     "platformdirs==4.12.3",
     "pygame-ce==2.5.8",
+]
+
+[project.optional-dependencies]
+# Developer mode only (tsdk dev); the TTEA console runs tsdk play without it.
+dev = [
     # Not the pyside6 metapackage, which also installs WebEngine and Pdf. Addons holds QtMultimedia.
     "pyside6-essentials>=6.12,<7",
     "pyside6-addons>=6.12,<7",
 ]
+
+[dependency-groups]
+# uv sync in this checkout installs developer mode too.
+dev = ["tsdk[dev]"]
 
 [project.scripts]
 tsdk = "tsdk.cli:main"

@@ -64,7 +64,7 @@ Faça commit do `uv.lock` de cada jogo.
 | --- | --- |
 | `tsdk new DESTINO [--id ID] [--name NOME] [--profile body\|hands\|face]` | Cria o projeto: `ttea.toml`, `pyproject.toml`, `game.py`, `.gitignore` e `LICENSE` |
 | `tsdk check [projeto]` | Valida o manifesto e o código sem executar o jogo |
-| `tsdk dev [projeto]` | Abre o modo de desenvolvimento |
+| `tsdk dev [projeto]` | Abre o modo de desenvolvimento (precisa do extra `tsdk[dev]`, com o PySide6) |
 | `tsdk build [projeto] [--output ARQUIVO] [--release]` | Gera `dist/<id>-<versão>.ttea` |
 | `tsdk play CARTUCHO --lang IDIOMA --player_id ID --professional_id ID --data-dir PASTA` | Executa um cartucho no console T-TEA |
 
@@ -128,6 +128,7 @@ O `tsdk build` gera o `manifest.json` a partir dele, com a versão do TSDK e o c
 ### O modo de desenvolvimento testa o jogo sem o console
 
 `uv run tsdk dev [projeto]` abre uma janela em tela cheia, ainda sem jogo.
+Ele usa o PySide6, que fica no extra `dev`: o `uv sync` no `tsdk` e os projetos criados por `tsdk new` (`tsdk[dev]`) já o instalam. O console T-TEA só executa `tsdk play` e não baixa o PySide6.
 Em **Load game**, escolha uma pasta de projeto ou um `.ttea`. Cartuchos na pasta `games/` do TSDK aparecem direto no menu.
 O jogo ocupa dois terços da tela; o terço da direita controla o rastreamento, a gravação e o jogo.
 

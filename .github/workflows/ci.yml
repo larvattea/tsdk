@@ -37,6 +37,6 @@ jobs:
         working-directory: tsdk
         run: |
           uv venv
-          uv pip install --no-sources -e .
+          uv pip install --no-sources -e ".[dev]"
           uv run --no-project python -m unittest discover -s tests
           uvx --from ruff==0.11.13 ruff check --select E9,F src tests

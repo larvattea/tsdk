@@ -87,7 +87,14 @@ def main(argv=None):
         elif args.command == "build":
             print(build(args.project, args.output, args.release))
         elif args.command == "dev":
-            from .developer import run
+            try:
+                from .developer import run
+            except ModuleNotFoundError as error:
+                if (error.name or "").partition(".")[0] != "PySide6":
+                    raise
+                # PySide6 is the "dev" extra: the TTEA console only plays cartridges
+                print("tsdk: developer mode needs PySide6; install tsdk[dev]", file=sys.stderr)
+                return 1
 
             return run(args.project)
         elif args.command == "play":
