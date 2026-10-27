@@ -18,17 +18,26 @@ def _open_camera(cv2, camera_index):
     return cv2.VideoCapture(camera_index, getattr(cv2, backend)) if backend else cv2.VideoCapture(camera_index)
 
 
-def default_frame_size(camera_index):
-    """Width and height of the frames the camera delivers when opened without a size request."""
+def default_frame_size(camera_index, timeout=3.0):
+    """Width and height of the frames the camera delivers when opened without a size request.
+
+    Some cameras deliver no frame for a moment after opening (AVFoundation on macOS does), so
+    reading is retried for up to ``timeout`` seconds before the camera counts as unreadable.
+    """
     import cv2
 
     camera = _open_camera(cv2, camera_index)
     try:
-        ok, frame = camera.read() if camera.isOpened() else (False, None)
-        if not ok:
-            raise RuntimeError(f"Unable to read camera {camera_index}")
-        height, width = frame.shape[:2]
-        return width, height
+        deadline = time.monotonic() + timeout
+        while camera.isOpened():
+            ok, frame = camera.read()
+            if ok:
+                height, width = frame.shape[:2]
+                return width, height
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(0.05)
+        raise RuntimeError(f"Unable to read camera {camera_index}")
     finally:
         camera.release()
 

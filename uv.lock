@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.14.*"
 required-markers = [
     "platform_machine == 'AMD64' and sys_platform == 'win32'",
@@ -448,8 +448,17 @@ dependencies = [
     { name = "packaging" },
     { name = "platformdirs" },
     { name = "pygame-ce" },
+]
+
+[package.optional-dependencies]
+dev = [
     { name = "pyside6-addons" },
     { name = "pyside6-essentials" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "tsdk", extra = ["dev"] },
 ]
 
 [package.metadata]
@@ -460,6 +469,10 @@ requires-dist = [
     { name = "packaging", specifier = ">=26,<27" },
     { name = "platformdirs", specifier = "==4.12.3" },
     { name = "pygame-ce", specifier = "==2.5.8" },
-    { name = "pyside6-addons", specifier = ">=6.12,<7" },
-    { name = "pyside6-essentials", specifier = ">=6.12,<7" },
+    { name = "pyside6-addons", marker = "extra == 'dev'", specifier = ">=6.12,<7" },
+    { name = "pyside6-essentials", marker = "extra == 'dev'", specifier = ">=6.12,<7" },
 ]
+provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "tsdk", extras = ["dev"] }]

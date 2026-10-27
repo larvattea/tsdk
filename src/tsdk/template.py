@@ -63,6 +63,10 @@ version = "0.1.0"
 requires-python = ">=3.14,<3.15"
 dependencies = ["tsdk>=0.2,<0.3"]
 
+# Developer mode (tsdk dev) needs PySide6; uv sync installs this group.
+[dependency-groups]
+dev = ["tsdk[dev]"]
+
 [tool.uv.sources]
 tsdk = {{ git = "https://github.com/larvattea/tsdk", branch = "main" }}
 ''',
